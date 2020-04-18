@@ -1,0 +1,617 @@
+   .IF *>0
+
+getDir
+   close 1
+   OPEN 1,6,0,"D:*.CH8"
+
+   moveq.w nameBuffer,temp.out
+   moveq.b 0,fileCounter
+
+   ;get line
+getLine
+    ;in Happy DOS there are 2 chars in front of the file name
+    get 1
+    bmi lineError ; I do not expect it here, but just in case...
+    get 1
+    bmi lineError ; I do not expect it here, but just in case...
+    cmp #32  ;for normal file name here comes space, for the last one it is not space
+             ;"0517 Free Sectors" begin - the last line of DIR
+    bne dirEnd
+    moveq.b 8,temp.in
+getFileNameLoop
+    get 1
+    bmi lineError ; I do not expect it here, but just in case...
+    ldy #0
+    sta (temp.out),y
+    add.q 1,temp.out
+    dec temp.in
+    bne getFileNameLoop
+    ;get the remaining bytes here
+    
+getRemains
+    get 1
+    bmi lineError ; I do not expect it here, but just in case...
+    cmp #155 ;[endline]
+    bne getRemains
+lineError
+    ;here I have one name in my name buffer.
+    icl fileCounter
+    cmp #64 ; too many files... sorry, no bonus
+    bne getLine
+dirEnd
+    close 1
+    rts
+;-----------------------------------------------
+;fileselector
+;-----------------------------------------------
+fileSelector
+ 
+   ;---display downloaded directory of .CH8 files
+   moveq.w nameBuffer,temp.in
+   
+   ldx #0
+
+displayFileNamesLoop
+   lda fileOffsetL,x
+   sta temp.out
+   lda fileOffsetH,x
+   sta temp.out+1
+   
+   ldy #0
+displayFileLoop
+   lda (temp.in),y
+   ;.sbyte "A" == $21
+   ;.byte  "A" == $41
+   sec 
+   sbc #$20 ;.byte to .sbyte conversion
+   iny      ;shift one char to right
+   sta (temp.out),y
+   cpy #8
+   bne displayFileLoop
+   
+   add.q 8,temp.in
+   
+   inx
+   cpx fileCounter
+   bne displayFileNamesLoop
+
+   ;---------------------------------
+   ;select the file
+
+   close 1         ;[lame]
+   open 1,4,0,"K:" ;what the heck??? after 16 years of coding on Atari
+                   ;am I going to use system to read a key for the very first time???
+                   ;Am I getting old???
+readKeyLoop
+    jsr inverseCursor               
+
+    get 1
+    pha
+    jsr inverseCursor
+    pla
+    cmp #45
+    beq keyUp
+    cmp #28
+    beq keyUp
+    cmp #61
+    beq keyDown
+    cmp #29
+    beq keyDown
+    cmp #43
+    beq keyLeft
+    cmp #30
+    beq keyLeft                   
+    cmp #42
+    beq keyRight
+    cmp #31
+    beq keyRight                  
+    cmp #155
+    beq keyReturn
+    ;cmp #27
+    ;beq keyEsc
+    jmp readKeyLoop
+
+keyUp    
+   lda selectedFile
+   cmp #0
+   beq doNotUp
+   dec selectedFile
+doNotUp
+   jmp readKeyLoop
+
+keyDown  
+   ldx selectedFile
+   inx
+   cpx fileCounter
+   bne doNotDown
+   dex selectedFile
+doNotDown
+   stx selectedFile
+   jmp readKeyLoop
+keyLeft
+   lda selectedFile
+   sec
+   sbc #22
+   bmi doNotLeft
+   sta selectedFile
+doNotLeft
+   jmp readKeyLoop   
+      
+keyRight    
+   lda selectedFile
+   clc
+   adc #22 ;number of lines on the fileselector screen
+   cmp fileCounter
+   bpl doNotRight
+   sta selectedFile
+doNotRight
+   jmp readKeyLoop
+keyEsc   
+   
+keyReturn
+   close 1
+   
+   ;----copy selected name
+   moveq.w selectedNameBuffer,temp.out
+   jsr selFileAddr
+  
+   ldy #7
+nameCopyLoop   
+   lda (temp.in),y
+   cmp #$20 ;space to be replaced with question mark
+   bne notSpace
+   lda #'? ;'
+notSpace   
+   sta (temp.out),y
+   dey
+   bpl nameCopyLoop
+   ;now in selectedName I have full name like D:MAZE    .CH8
+   ;hmm... I am curious if it would work...
+   ;it looks like it doesn't, so I replace spaces with question marks
+   ;like D:MAZE????.CH8
+   ;it MIGHT make some problems if similar files are present in the 
+   ;directory (and are in non-alphabetical order)
+   ;but it is unlikely anyway... way too few games are available for Chip8
+   
+   rts
+;--------
+inverseCursor
+    ;----display inversed cursor----
+    ldx selectedFile
+    lda fileOffsetL,x
+    sta temp.out
+    lda fileOffsetH,x
+    sta temp.out+1
+    
+    ldy #9
+inverseLoop
+    lda (temp.out),y
+    EOR #$80
+    sta (temp.out),y
+    dey
+    bpl inverseLoop
+    rts
+;----------------------------------------
+selFileAddr
+   ;points temp.in to begin of the selected filename
+   lda selectedFile
+   sta temp.in
+   lda #0
+   sta temp.in+1
+   ;mul by 8 (length of file names)
+   asl temp.in
+   rol temp.in+1
+   asl temp.in
+   rol temp.in+1
+   asl temp.in
+   rol temp.in+1
+   ;add nameBuffer address
+   clc
+   lda temp.in
+   adc #<nameBuffer
+   sta temp.in
+   lda temp.in+1
+   adc #>nameBuffer
+   sta temp.in+1
+   rts
+;----------------------------------------
+loadGame
+    ;game name + D: is in selectedName
+    ;-----
+    ;clear Chip8Code memory
+    moveq.w Chip8Code,temp.out
+    
+    ldy #0
+memClearLoop
+    lda #0
+    sta (temp.out),y
+    add.q 1,temp.out
+    dcmp.q temp.out,Chip8Code+$1000
+    bne memClearLoop
+    
+
+    moveq.w Chip8Code,temp.out
+    
+    close 1 ;[lame]
+    opena 1,4,0,selectedName
+readFileLoop
+    get 1
+    bmi endOfFile
+    ldy #0
+    sta (temp.out),y
+    add.q 1,temp.out
+    jmp readFileLoop
+endOfFile
+    close 1
+    
+    rts
+;---------------------------------
+getConfig
+;reads configuration file CHIP8.CFG
+;from current directory
+;and tries to assign joystick to Chip8 keyboard
+;selectedName should be already done, 
+;so run it after FileSelector and before emulation starts
+
+   close 1 ;[lame] because I should know if #1 is closed or not
+           ; but it is a no-brainer
+   open 1,4,0,"D:CHIP8.CFG"
+   ;open 1,4,0,"D:C.TXT"
+   ;open 2,8,0,"H:E.TXT"
+   
+ 
+   
+getConfigLoop
+    jsr selFileAddr
+    moveq.b 0,temp.out   ;char counter 
+
+getConfigLoopInner
+    get 1
+    ;put 2
+    lbmi getConfigError
+    cmp #'/ ;'  / = comment
+    beq finishLine
+    ldy #0
+    cmp (temp.in),y
+    bne finishLine
+    ;1st char found!
+    add.q 1,temp.in
+    icl temp.out
+    cmp #8
+    bne getConfigLoopInner
+    ; name found!!!!
+    get 1 ; one space after file name
+    get 1
+    jsr asciiFind 
+    stx joystickConversion
+    get 1 ; one space 
+    get 1
+    jsr asciiFind 
+    stx joystickConversion+1
+    get 1 ; one space 
+    get 1
+    jsr asciiFind 
+    stx joystickConversion+2
+    get 1 ; one space 
+    get 1
+    jsr asciiFind 
+    stx joystickConversion+3
+    get 1 ; one space 
+    get 1
+    jsr asciiFind 
+    stx joystickConversion+4
+    get 1 ; one space 
+    get 1
+    jsr asciiFind
+    lda toUpperNibble,X  ;A=X*16
+    sta delay
+    close 1
+    ;close 2
+    rts
+
+finishLine
+    get 1
+    bmi getConfigError
+    cmp #155 ;[endline]
+    bne finishLine
+    jmp getConfigLoop
+    
+getConfigError
+    close 1
+    ;close 2
+    rts
+;----------------
+asciiFind    
+    ldx #15
+asciiFindLoop
+    cmp asciiNumber,X
+    beq asciiFound
+    dex
+    bpl asciiFindLoop
+    ;in X I have binary number to be put into 
+asciiFound
+    rts
+asciiNumber
+    .byte "0123456789ABCDEF"
+;----------------
+dl.fileSelector
+    .byte $70,$70
+    .byte $42
+    .word fileSelectorHeader
+    .byte 0,2,0,2
+    .byte $40
+    .byte $42
+    .word fileSelectorScreen
+    .byte 2,2,2,2,2,2,2,2,2,2
+    .byte 2,2,2,2,2,2,2,2,2,2
+    .byte 2
+
+    .byte $41
+    .word dl.fileSelector
+fileSelectorHeader
+   ;.sbyte "                                " ;32 bytes
+    .sbyte " Chip 8 & SuperChip 8 emulator  "
+    .sbyte "by pirx@5oft.com 2006-01-17 v1.1"
+    .sbyte "   select game with cursors     "
+fileSelectorScreen
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    ;-----------10----------    
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    ;-----------20----------    
+    .sbyte "                                " ;32 bytes
+    .sbyte "                                " ;32 bytes
+    ;-----------22----------    
+fileSelectorScreenEnd
+
+selectedFile
+    .byte 0    
+fileCounter
+    .byte 0    
+selectedName
+    .byte "D:"
+
+selectedNameBuffer
+    .byte "        "
+    .byte ".CH8"
+    .byte $20+$80  ;end of name 
+nameBuffer
+   ;.byte "12345678"
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---10----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---20----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---30----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---40----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---50----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---60----------    
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    .byte "        "
+    ;---64----------    
+    ;max 64 names on one directory... 
+    ;quite a cheat...
+    ;will not work good with Sparta....
+    ;I am so sorry...
+name    
+fileOffsetL
+    ;[lame]
+    .byte <[fileSelectorScreen+32*0]
+    .byte <[fileSelectorScreen+32*1]
+    .byte <[fileSelectorScreen+32*2]
+    .byte <[fileSelectorScreen+32*3] 
+    .byte <[fileSelectorScreen+32*4] 
+    .byte <[fileSelectorScreen+32*5] 
+    .byte <[fileSelectorScreen+32*6] 
+    .byte <[fileSelectorScreen+32*7] 
+    .byte <[fileSelectorScreen+32*8] 
+    .byte <[fileSelectorScreen+32*9] 
+    .byte <[fileSelectorScreen+32*10] 
+    .byte <[fileSelectorScreen+32*11]
+    .byte <[fileSelectorScreen+32*12] 
+    .byte <[fileSelectorScreen+32*13]
+    .byte <[fileSelectorScreen+32*14] 
+    .byte <[fileSelectorScreen+32*15] 
+    .byte <[fileSelectorScreen+32*16] 
+    .byte <[fileSelectorScreen+32*17] 
+    .byte <[fileSelectorScreen+32*18] 
+    .byte <[fileSelectorScreen+32*19] 
+    .byte <[fileSelectorScreen+32*20] 
+    .byte <[fileSelectorScreen+32*21]
+    ;----22--- 
+    .byte <[fileSelectorScreen+32*0+11]
+    .byte <[fileSelectorScreen+32*1+11]
+    .byte <[fileSelectorScreen+32*2+11] 
+    .byte <[fileSelectorScreen+32*3+11] 
+    .byte <[fileSelectorScreen+32*4+11] 
+    .byte <[fileSelectorScreen+32*5+11] 
+    .byte <[fileSelectorScreen+32*6+11] 
+    .byte <[fileSelectorScreen+32*7+11] 
+    .byte <[fileSelectorScreen+32*8+11] 
+    .byte <[fileSelectorScreen+32*9+11] 
+    .byte <[fileSelectorScreen+32*10+11] 
+    .byte <[fileSelectorScreen+32*11+11]
+    .byte <[fileSelectorScreen+32*12+11] 
+    .byte <[fileSelectorScreen+32*13+11] 
+    .byte <[fileSelectorScreen+32*14+11] 
+    .byte <[fileSelectorScreen+32*15+11] 
+    .byte <[fileSelectorScreen+32*16+11] 
+    .byte <[fileSelectorScreen+32*17+11] 
+    .byte <[fileSelectorScreen+32*18+11] 
+    .byte <[fileSelectorScreen+32*19+11] 
+    .byte <[fileSelectorScreen+32*20+11] 
+    .byte <[fileSelectorScreen+32*21+11]
+    ;----44--- 
+    .byte <[fileSelectorScreen+32*0+11+11]
+    .byte <[fileSelectorScreen+32*1+11+11]
+    .byte <[fileSelectorScreen+32*2+11+11] 
+    .byte <[fileSelectorScreen+32*3+11+11] 
+    .byte <[fileSelectorScreen+32*4+11+11] 
+    .byte <[fileSelectorScreen+32*5+11+11] 
+    .byte <[fileSelectorScreen+32*6+11+11] 
+    .byte <[fileSelectorScreen+32*7+11+11] 
+    .byte <[fileSelectorScreen+32*8+11+11] 
+    .byte <[fileSelectorScreen+32*9+11+11] 
+    .byte <[fileSelectorScreen+32*10+11+11] 
+    .byte <[fileSelectorScreen+32*11+11+11]
+    .byte <[fileSelectorScreen+32*12+11+11] 
+    .byte <[fileSelectorScreen+32*13+11+11] 
+    .byte <[fileSelectorScreen+32*14+11+11] 
+    .byte <[fileSelectorScreen+32*15+11+11] 
+    .byte <[fileSelectorScreen+32*16+11+11] 
+    .byte <[fileSelectorScreen+32*17+11+11]
+    .byte <[fileSelectorScreen+32*18+11+11] 
+    .byte <[fileSelectorScreen+32*19+11+11] 
+    .byte <[fileSelectorScreen+32*20+11+11] 
+    .byte <[fileSelectorScreen+32*21+11+11]
+    ;----66--- 
+fileOffsetH    
+    .byte >[fileSelectorScreen+32*0]
+    .byte >[fileSelectorScreen+32*1]
+    .byte >[fileSelectorScreen+32*2]
+    .byte >[fileSelectorScreen+32*3] 
+    .byte >[fileSelectorScreen+32*4] 
+    .byte >[fileSelectorScreen+32*5] 
+    .byte >[fileSelectorScreen+32*6] 
+    .byte >[fileSelectorScreen+32*7] 
+    .byte >[fileSelectorScreen+32*8] 
+    .byte >[fileSelectorScreen+32*9] 
+    .byte >[fileSelectorScreen+32*10] 
+    .byte >[fileSelectorScreen+32*11]
+    .byte >[fileSelectorScreen+32*12] 
+    .byte >[fileSelectorScreen+32*13]
+    .byte >[fileSelectorScreen+32*14] 
+    .byte >[fileSelectorScreen+32*15] 
+    .byte >[fileSelectorScreen+32*16] 
+    .byte >[fileSelectorScreen+32*17] 
+    .byte >[fileSelectorScreen+32*18] 
+    .byte >[fileSelectorScreen+32*19] 
+    .byte >[fileSelectorScreen+32*20] 
+    .byte >[fileSelectorScreen+32*21]
+    ;----22--- 
+    .byte >[fileSelectorScreen+32*0+11]
+    .byte >[fileSelectorScreen+32*1+11]
+    .byte >[fileSelectorScreen+32*2+11] 
+    .byte >[fileSelectorScreen+32*3+11] 
+    .byte >[fileSelectorScreen+32*4+11] 
+    .byte >[fileSelectorScreen+32*5+11] 
+    .byte >[fileSelectorScreen+32*6+11] 
+    .byte >[fileSelectorScreen+32*7+11] 
+    .byte >[fileSelectorScreen+32*8+11] 
+    .byte >[fileSelectorScreen+32*9+11] 
+    .byte >[fileSelectorScreen+32*10+11] 
+    .byte >[fileSelectorScreen+32*11+11]
+    .byte >[fileSelectorScreen+32*12+11] 
+    .byte >[fileSelectorScreen+32*13+11] 
+    .byte >[fileSelectorScreen+32*14+11] 
+    .byte >[fileSelectorScreen+32*15+11] 
+    .byte >[fileSelectorScreen+32*16+11] 
+    .byte >[fileSelectorScreen+32*17+11] 
+    .byte >[fileSelectorScreen+32*18+11] 
+    .byte >[fileSelectorScreen+32*19+11] 
+    .byte >[fileSelectorScreen+32*20+11] 
+    .byte >[fileSelectorScreen+32*21+11]
+    ;----44--- 
+    .byte >[fileSelectorScreen+32*0+11+11]
+    .byte >[fileSelectorScreen+32*1+11+11]
+    .byte >[fileSelectorScreen+32*2+11+11] 
+    .byte >[fileSelectorScreen+32*3+11+11] 
+    .byte >[fileSelectorScreen+32*4+11+11] 
+    .byte >[fileSelectorScreen+32*5+11+11] 
+    .byte >[fileSelectorScreen+32*6+11+11] 
+    .byte >[fileSelectorScreen+32*7+11+11] 
+    .byte >[fileSelectorScreen+32*8+11+11] 
+    .byte >[fileSelectorScreen+32*9+11+11] 
+    .byte >[fileSelectorScreen+32*10+11+11] 
+    .byte >[fileSelectorScreen+32*11+11+11]
+    .byte >[fileSelectorScreen+32*12+11+11] 
+    .byte >[fileSelectorScreen+32*13+11+11] 
+    .byte >[fileSelectorScreen+32*14+11+11] 
+    .byte >[fileSelectorScreen+32*15+11+11] 
+    .byte >[fileSelectorScreen+32*16+11+11] 
+    .byte >[fileSelectorScreen+32*17+11+11]
+    .byte >[fileSelectorScreen+32*18+11+11] 
+    .byte >[fileSelectorScreen+32*19+11+11] 
+    .byte >[fileSelectorScreen+32*20+11+11] 
+    .byte >[fileSelectorScreen+32*21+11+11]
+    ;----66--- 
+    
+    
+  .ENDIF
+    
