@@ -26,89 +26,70 @@
       icl 'lib/ATARISYS.ASM'
       icl 'lib/MACRO.ASM'
 ;----------------------
-    .macro inc.PC
+    .macro inc_PC
         clc
         lda PC+1
         adc #2
         sta PC+1
-        bcc ?skip
-        inc PC
-?skip
+        scc:inc PC
     .endm
 ;----------------------
 
-    * = $80
 ;==================================
 ;virtual machine registers
-V0	.byte 0
-V1	.byte 0
-V2	.byte 0
-V3	.byte 0
-V4	.byte 0
-V5	.byte 0
-V6	.byte 0
-V7	.byte 0
-V8	.byte 0
-V9	.byte 0
-VA	.byte 0
-VB	.byte 0
-VC	.byte 0
-VD	.byte 0
-VE	.byte 0
-VF	.byte 0 ;carry and collision register
-I		.word 0 ;Chip 8 type - low endian
-PC  .word 0 ;Chip 8 type - low endian
-soundTimer
-    .byte 0
-delayTimer
-    .byte 0
-superChipMode
-    .byte 0
+    .zpvar V0    .byte = $80
+    .zpvar V1    .byte
+    .zpvar V2    .byte
+    .zpvar V3    .byte
+    .zpvar V4    .byte
+    .zpvar V5    .byte
+    .zpvar V6    .byte
+    .zpvar V7    .byte
+    .zpvar V8    .byte
+    .zpvar V9    .byte
+    .zpvar VA    .byte
+    .zpvar VB    .byte
+    .zpvar VC    .byte
+    .zpvar VD    .byte
+    .zpvar VE    .byte
+    .zpvar VF    .byte ;carry and collision register
+    .zpvar I     .word ;Chip 8 type - low endian
+    .zpvar PC    .word ;Chip 8 type - low endian
+    .zpvar soundTimer .byte
+    .zpvar delayTimer .byte
+    .zpvar superChipMode .byte
 ;==================================
 ;emulator registers - 6502 type - big endian
-fetchAddress
-    .word 0
-stackPointer
-    .word 0
-currentInstruction
-    .word 0
-jumpPad
-    .word 0
-screenWidth
-    .byte 0  ;Chip 8 = 8 bytes, Super Chip 8 = 16 bytes
+    .zpvar fetchAddress .word
+    .zpvar stackPointer .word
+    .zpvar currentInstruction .word
+    .zpvar jumpPad .word
+    .zpvar screenWidth .byte  ;Chip 8 = 8 bytes, Super Chip 8 = 16 bytes
 ;==================================
 ;other zero page variables
-temp_in  ;for use only in most nested subroutines
-    .word 0
-temp_out ;for use only in most nested subroutines
-    .word 0 
-collisionByte
-    .byte 0
+    .zpvar temp_in .word ;for use only in most nested subroutines
+    .zpvar temp_out .word  ;for use only in most nested subroutines
+    .zpvar collisionByte .byte
     
-page0VarsEnd
-    .if page0VarsEnd > $FF
-        .error "Too many variables on page 0"
-    .endif 
 ;==================================
-    
   
-    * = $3000
+    org $3000
     jmp start
- 	  .include#io_OMC65.s65
- 	  .include#Chip8IO.s65
+       .include#io_OMC65.s65
+       .include#Chip8IO.s65
 
 start
 
-    mva 0,COLPF2S ;nice black background
-    mva 0,selectedFile
+    mva #0,COLPF2S ;nice black background
+    mva #0,selectedFile
   
-    ;vdl dl.fileSelector,$01
+    ;vdl dl_fileSelector,$01
 
     lda DMACTLS
     sta screenWidth
-    mva 0,DMACTLS
+    mva #0,DMACTLS
     wait
-     jsr getDir
+    jsr getDir
     lda screenWidth
     sta DMACTLS
 
@@ -116,11 +97,11 @@ lateStart
     ;hold till keys released
     ;I do not think it is necessary
 holdLoop
-         LDA SKSTAT
-         AND #$04
-         BEQ holdLoop
+    LDA SKSTAT
+    AND #$04
+    BEQ holdLoop
 
-    vdl dl.fileSelector,$01
+    vdl dl_fileSelector,$01
 
     jsr fileSelector
 
@@ -128,7 +109,7 @@ holdLoop
  
     vmain vint,7
     vdli dli
-    inc.PC  ;to help with reinitialisation
+    inc_PC  ;to help with reinitialisation
             ;PC starts not at $200, but at $200-2 !!!!!!!!!
             ;so it needs to be increased before emulation starts
 emulationLoop
@@ -155,7 +136,7 @@ emulationLoop
     
     jsr executeInstruction
 
-    inc.PC 
+    inc_PC 
     
     jsr delayChip8  ;atari is too fast for Chip8
 
@@ -193,19 +174,8 @@ executeInstruction
 ;execute blocks for the Chip 8 instructions
 ;==================================
      
-    .macro HALT
-?loop
-    lda RANDOM
-    .if %0=1
-        and #%1
-    .else
-        and #$03
-    .endif
-    sta COLBAK
-    jmp ?loop
-    .endm
 ;------------------
-Chip8.0XXX
+Chip8_0XXX
     lda currentInstruction+1
     cmp #$EE
     beq returnFromSubroutine
@@ -214,17 +184,16 @@ Chip8.0XXX
     cmp #$FF
     beq setSuperMode
     cmp #$FC
-    lbeq scrollLeft 
+    jeq scrollLeft 
     cmp #$FB
-    lbeq scrollRight
+    jeq scrollRight
     cmp #$FE
-    lbeq setChip8Mode
+    jeq setChip8Mode
 
     cmp #$FD
-    lbeq emulationInit ;originally it is "quit from Emulator"
+    jeq emulationInit ;originally it is "quit from Emulator"
                        ;but we will just reset the game
                        ;it may not always work though...
-    ;HALT
     ;---last one!!!
     and #$F0
     cmp #$C0
@@ -235,27 +204,27 @@ Chip8.0XXX
     rts
 ;-------------------    
 setSuperMode
-    mva 1,superChipMode
-    mva 16,screenWidth
-    vdl dl.SuperChip8
+    mva #1,superChipMode
+    mva #16,screenWidth
+    vdl dl_SuperChip8
     rts
 ;-------------------    
 setChip8Mode    
-    mva 0,superChipMode
-    mva 8,screenWidth
-    vdl dl.Chip8
+    mva #0,superChipMode
+    mva #8,screenWidth
+    vdl dl_Chip8
     rts
 ;-------------------    
 returnFromSubroutine
-		;get PC from stack
-		ldy #0
-		lda (stackPointer),y
-		sta PC
-		iny
-		lda (stackPointer),y
-		sta PC+1
-		sub.q 2,stackPointer
-		rts
+    ;get PC from stack
+    ldy #0
+    lda (stackPointer),y
+    sta PC
+    iny
+    lda (stackPointer),y
+    sta PC+1
+    sbw stackPointer #2
+    rts
 ;-------------------    
 clearScreen
     ;at the moment it is clearing the SuperChip 8 screen
@@ -263,14 +232,14 @@ clearScreen
     ;it will need a change if speed is the issue
 
     ldy #0
-    moveq.w screen,temp_out
-loop01
-		lda #0
-		;lda RANDOM
-		sta (temp_out),y
-		add.q 1,temp_out
-		dcmp.q temp_out,[screen+32*64] 
-		bne loop01
+    mwa #screen,temp_out
+@
+        lda #0
+        ;lda RANDOM
+        sta (temp_out),y
+        adw temp_out #1
+        cpw temp_out #[screen+32*64] 
+    bne @-
     rts
 ;-------------------    
 scrollDown
@@ -288,8 +257,8 @@ scrollDown
                              ;normal value    
     
 repeatScroll
-    moveq.w screen+16*62,temp_in
-    moveq.w screen+16*63,temp_out
+    mwa #screen+16*62,temp_in
+    mwa #screen+16*63,temp_out
     ldx #[64-1]
     
 scrollScreenLoop    
@@ -301,13 +270,13 @@ scrollLineLoop
     dey
     bpl scrollLineLoop
     
-    sub.q 16,temp_in
-    sub.q 16,temp_out
+    sbw temp_in #16
+    sbw temp_out #16
     dex
     bne scrollScreenLoop
 
     ;clear the first line
-    moveq.w screen,temp_out
+    mwa #screen,temp_out
     lda #0
     ldy #15
 clearFirstLineLoop
@@ -325,9 +294,9 @@ scrollLeft
     ;what a shame it is not 8 pixels...
     ;SuperChip8 ONLY!!!
     
-    moveq.w screen,temp_out
+    mwa #screen,temp_out
    
-    mva 64,temp_in ;lines counter
+    mva #64,temp_in ;lines counter
 scrollLeftNextLine    
     ldy #0
 scrollLeftLineLoop    
@@ -354,7 +323,7 @@ scrollLeftLineLoop
     and #$F0
     sta (temp_out),y
     
-    add.q 16,temp_out
+    adw temp_out #16
     
     dec temp_in
     bne scrollLeftNextLine
@@ -365,9 +334,9 @@ scrollRight
     ;what a shame it is not 8 pixels...
     ;SuperChip8 ONLY!!!
     
-    moveq.w screen,temp_out
+    mwa #screen,temp_out
    
-    mva 64,temp_in ;lines counter
+    mva #64,temp_in ;lines counter
 scrollRightNextLine    
     ldy #15
 scrollRightLineLoop    
@@ -395,7 +364,7 @@ scrollRightLineLoop
     and #$0F
     sta (temp_out),y
     
-    add.q 16,temp_out
+    adw temp_out #16
     
     dec temp_in
     bne scrollRightNextLine
@@ -403,8 +372,8 @@ scrollRightLineLoop
 
 ;------------------
 ;------------------
-Chip8.1XXX
-    ;1xxx  	 jmp xxx  	 jump to address xxx
+Chip8_1XXX
+    ;1xxx       jmp xxx       jump to address xxx
     
     
     sec
@@ -422,12 +391,12 @@ Chip8.1XXX
     
     rts
 ;------------------
-Chip8.2XXX
-    ;2xxx  	 jsr xxx  	 jump to subroutine at address xxx
+Chip8_2XXX
+    ;2xxx       jsr xxx       jump to subroutine at address xxx
     .LOCAL
     
     ;save current PC on stack
-    add.q 2,stackPointer    ;stack pointer up
+    adw stackPointer #2    ;stack pointer up
     lda PC
     ldy #0
     sta (stackPointer),y
@@ -452,58 +421,58 @@ Chip8.2XXX
 
     rts
 ;------------------
-Chip8.3XXX
-    ;skeq vr,xx  	 skip if register r = constant
-		lda currentInstruction
-		and #$0F
-		tax
-		lda V0,X
-		cmp currentInstruction+1
-		bne doNotSkip3XXX
-    inc.PC
+Chip8_3XXX
+    ;skeq vr,xx       skip if register r = constant
+        lda currentInstruction
+        and #$0F
+        tax
+        lda V0,X
+        cmp currentInstruction+1
+        bne doNotSkip3XXX
+    inc_PC
 doNotSkip3XXX
     rts
 ;------------------
-Chip8.4XXX
-		;4rxx  	 skne vr,xx  	 skip if register r <> constant
-		lda currentInstruction
-		and #$0F
-		tax
-		lda V0,X
-		cmp currentInstruction+1
-		beq doNotSkip4XXX
-    inc.PC
+Chip8_4XXX
+        ;4rxx       skne vr,xx       skip if register r <> constant
+        lda currentInstruction
+        and #$0F
+        tax
+        lda V0,X
+        cmp currentInstruction+1
+        beq doNotSkip4XXX
+    inc_PC
 doNotSkip4XXX
     rts
 ;------------------
-Chip8.5XXX
-    ;5ry0  	 skeq vr,vy  	 skip if register r = register y
-		
-		;load VR
-		lda currentInstruction
-		and #$0F
-		tax
-		lda V0,X
-		tay
-		
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		tya
-		cmp V0,X
-		
-		bne doNotSkip5XXX
-    inc.PC      ;skippng here
+Chip8_5XXX
+    ;5ry0       skeq vr,vy       skip if register r = register y
+        
+        ;load VR
+        lda currentInstruction
+        and #$0F
+        tax
+        lda V0,X
+        tay
+        
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        tya
+        cmp V0,X
+        
+        bne doNotSkip5XXX
+    inc_PC      ;skippng here
 doNotSkip5XXX
     rts
 ;------------------
-Chip8.6XXX
-    ;6rxx  	 mov vr,xx  	 move constant to register r
+Chip8_6XXX
+    ;6rxx       mov vr,xx       move constant to register r
     lda currentInstruction
     and #$0F
     tax
@@ -511,8 +480,8 @@ Chip8.6XXX
     sta V0,X
     rts
 ;------------------
-Chip8.7XXX
-    ;7rxx  	 add vr,vx  	 add constant to register r  	 
+Chip8_7XXX
+    ;7rxx       add vr,vx       add constant to register r       
     ;No carry generated
 
     lda currentInstruction
@@ -525,7 +494,7 @@ Chip8.7XXX
 
     rts
 ;------------------
-Chip8.8XXX
+Chip8_8XXX
     ; 8ryS - multiple register manipulation instruction
     ; lowest nibble (S) sets the operation
     ; Important - not all sub-instructions are defined
@@ -535,291 +504,287 @@ Chip8.8XXX
     and #$0F
     asl a     ;*2 because JumpTable is 2 bytes wide
     tax
-    lda C8.8XXX.JumpTable,x
+    lda C8_8XXX_JumpTable,x
     sta JumpPad
-    lda C8.8XXX.JumpTable+1,x
+    lda C8_8XXX_JumpTable+1,x
     sta JumpPad+1
     
     jmp (JumpPad)
 ;------     
-C8.8XX0
-    ;8ry0  	 mov vr,vy  	 move register vy into vr
-		
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
-		
-		lda currentInstruction
-		and #$0F
-		tax
-		tya
-		sta V0,X
-	
-		rts
-
-C8.8XX1
-		;8ry1  	 or rx,ry  	 or register vy into register vx
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
-		
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		tya
-		ora V0,X
-	  sta V0,X
-    rts
-
-C8.8XX2
-    ;8ry2  	 and rx,ry  	 and register vy into register vx
-
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
-		
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		tya
-		and V0,X
-	  sta V0,X
-    rts
-
-C8.8XX3
-    ;8ry3  	 xor rx,ry  	 exclusive or register ry into register rx
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
-		
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		tya
-		EOR V0,X
-	  sta V0,X
-
-    rts
-
-C8.8XX4
-    ;8ry4  	 add vr,vy  	 add register vy to vr,carry in vf  
+C8_8XX0
+    ;8ry0       mov vr,vy       move register vy into vr
+        
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        tay
+        
+        lda currentInstruction
+        and #$0F
+        tax
+        tya
+        sta V0,X
     
-    mva 0,VF
-		;load VY
-	  lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		sta temp_in
+        rts
 
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		clc
-		lda V0,X
-	  adc temp_in 
-	  sta V0,X
-	  bcc NoCarry.8XX4
-	  mva 1,VF
-NoCarry.8XX4 
+C8_8XX1
+        ;8ry1       or rx,ry       or register vy into register vx
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        tay
+        
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
+        tya
+        ora V0,X
+      sta V0,X
     rts
 
-C8.8XX5
-    ; 8ry5  	 sub vr,vy  	 subtract register vy from vr,borrow in vf  	 
+C8_8XX2
+    ;8ry2       and rx,ry       and register vy into register vx
+
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        tay
+        
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
+        tya
+        and V0,X
+      sta V0,X
+    rts
+
+C8_8XX3
+    ;8ry3       xor rx,ry       exclusive or register ry into register rx
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        tay
+        
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
+        tya
+        EOR V0,X
+      sta V0,X
+
+    rts
+
+C8_8XX4
+    ;8ry4       add vr,vy       add register vy to vr,carry in vf  
+    
+    mva #0,VF
+        ;load VY
+      lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        sta temp_in
+
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
+        clc
+        lda V0,X
+      adc temp_in 
+      sta V0,X
+      bcc NoCarry_8XX4
+      mva #1,VF
+NoCarry_8XX4 
+    rts
+
+C8_8XX5
+    ; 8ry5       sub vr,vy       subtract register vy from vr,borrow in vf       
     ; vf set to 1 if borrows
     ; VX = VX - VY
 
-		mva 0,VF
-		
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		sta temp_in
+        mva #0,VF
+        
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        sta temp_in
 
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		sec
-		lda V0,X
-	  sbc temp_in
-	  sta V0,X
-	  bcc NoCarry.8XX5
-	  mva 1,VF
-NoCarry.8XX5
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
+        sec
+        lda V0,X
+      sbc temp_in
+      sta V0,X
+      bcc NoCarry_8XX5
+      mva #1,VF
+NoCarry_8XX5
     rts
 
-C8.8XX6
-    ;8r06  	 shr vr  	 shift register vr right, 
+C8_8XX6
+    ;8r06       shr vr       shift register vr right, 
     ;bit 0 goes into register vf
 
-	  mva 0,VF
+      mva #0,VF
 
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
 
-		lda V0,X
-	  lsr a
-	  sta V0,X
+        lda V0,X
+      lsr a
+      sta V0,X
 
-	  bcc NoCarry.8XX6
-	  mva 1,VF
-NoCarry.8XX6
+      bcc NoCarry_8XX6
+      mva #1,VF
+NoCarry_8XX6
     rts
 
-C8.8XX7
-    ;8ry7  	 rsb vr,vy  	 
-    ;subtract register vr from register vy, result in vr  	 
+C8_8XX7
+    ;8ry7       rsb vr,vy       
+    ;subtract register vr from register vy, result in vr       
     ;vf set to 1 if borrows
     ;VX=VY-VX
 
-	  mva 0,VF
+      mva #0,VF
 
 
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
+        ;load VY
+        lda currentInstruction+1
+        and #$F0
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        tax
+        lda V0,X
+        tay
 
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
+        ;load VX
+        lda currentInstruction
+        and #$0F
+        tax
 
-		tya          ;VY
-		sec
-	  sbc V0,X     ;-VX
-	  sta V0,X     ;VX=
-	  bcc NoCarry.8XX7
-	  mva 1,VF
-NoCarry.8XX7
+        tya          ;VY
+        sec
+      sbc V0,X     ;-VX
+      sta V0,X     ;VX=
+      bcc NoCarry_8XX7
+      mva #1,VF
+NoCarry_8XX7
     rts
 
-C8.8XX8
-C8.8XX9
-C8.8XXa
-C8.8XXb
-C8.8XXc
-C8.8XXd
-C8.8XXf
+C8_8XX8
+C8_8XX9
+C8_8XXa
+C8_8XXb
+C8_8XXc
+C8_8XXd
+C8_8XXf
     ;there are no such instructions, so HALT...
-		HALT
+        HALT
     rts
 
-C8.8XYe
-    ;8r0e  	 shl vr  	 shift register vr left,bit 7 goes into register vf
-		;let's first ignore Y (although in ANT game it is set to 5)
-		
-		mva 0,VF
-		lda currentInstruction
-		and #$0F
-		tax
-		rol V0,X
-		bcc noCarry.8XYe
-		mva 1,VF
-		
-noCarry.8XYe		
-		rts
+C8_8XYe
+    ;8r0e       shl vr       shift register vr left,bit 7 goes into register vf
+        ;let's first ignore Y (although in ANT game it is set to 5)
+        
+        mva #0,VF
+        lda currentInstruction
+        and #$0F
+        tax
+        rol V0,X
+        scc:mva #1,VF
+        rts
 
 ;------     
-C8.8XXX.JumpTable
-    .word C8.8XX0
-    .word C8.8XX1
-    .word C8.8XX2
-    .word C8.8XX3
-    .word C8.8XX4
-    .word C8.8XX5
-    .word C8.8XX6
-    .word C8.8XX7
-    .word C8.8XX8
-    .word C8.8XX9
-    .word C8.8XXa
-    .word C8.8XXb
-    .word C8.8XXc
-    .word C8.8XXd
-    .word C8.8XYe
-    .word C8.8XXf
+C8_8XXX_JumpTable
+    .word C8_8XX0
+    .word C8_8XX1
+    .word C8_8XX2
+    .word C8_8XX3
+    .word C8_8XX4
+    .word C8_8XX5
+    .word C8_8XX6
+    .word C8_8XX7
+    .word C8_8XX8
+    .word C8_8XX9
+    .word C8_8XXa
+    .word C8_8XXb
+    .word C8_8XXc
+    .word C8_8XXd
+    .word C8_8XYe
+    .word C8_8XXf
     
 ;------------------
-Chip8.9XXX
-    ; 9ry0  	 skne rx,ry  	 skip if register rx <> register ry
+Chip8_9XXX
+    ; 9ry0       skne rx,ry       skip if register rx <> register ry
     
-		;load VY
-		lda currentInstruction+1
-		and #$F0
-		lsr a
-		lsr a
-		lsr a
-		lsr a
-		tax
-		lda V0,X
-		tay
+    ;load VY
+    lda currentInstruction+1
+    and #$F0
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tax
+    lda V0,X
+    tay
 
-		;load VX
-		lda currentInstruction
-		and #$0F
-		tax
-		
-		tya
-		cmp V0,X
-	  beq doNotSkip.9XY0
-	  inc.PC       ;skip 1 instruction if not equal
-doNotSkip.9XY0
+    ;load VX
+    lda currentInstruction
+    and #$0F
+    tax
+    
+    tya
+    cmp V0,X
+    seq:inc_PC       ;skip 1 instruction if not equal
+
     rts
 
 ;------------------
-Chip8.AXXX
-    ;axxx  	 mvi xxx  	 Load index register with constant xxx
+Chip8_AXXX
+    ;axxx       mvi xxx       Load index register with constant xxx
     lda currentInstruction+1
     sta I+1
     lda currentInstruction
@@ -827,12 +792,12 @@ Chip8.AXXX
     sta I
     rts
 ;------------------
-Chip8.BXXX
-		HALT
+Chip8_BXXX
+        HALT
     rts
 ;------------------
-Chip8.CXXX
-    ;crxx  	 rand vr,xxx     	 vr = random number less than or equal to xxx
+Chip8_CXXX
+    ;crxx       rand vr,xxx          vr = random number less than or equal to xxx
     ;from doc by DOOM:
     ;VX = Random number AND KK 
     ;(Use a random number and use binary AND on it. 
@@ -852,14 +817,14 @@ randomizeAgain
     
     
     ;move.w currentInstruction,valueHex+1
-    ;moveq.w textScreen+15,temp_out
+    ;mwa #textScreen+15,temp_out
     ;jsr printHex
-		
-		
+        
+        
     rts
 ;------------------
-Chip8.DXXX
-    ;dxys  	 sprite rx,ry,s  	 Draw sprite at screen location rx,ry height s
+Chip8_DXXX
+    ;dxys       sprite rx,ry,s       Draw sprite at screen location rx,ry height s
     ;Draws an 8xN (width x height) sprite 
     ;at the coordinates given in register X and Y. 
     ;Sprites stored in memory at location in index register (I),
@@ -869,63 +834,51 @@ Chip8.DXXX
     ;All drawing is xor drawing (e.g. it toggles the screen pixels)
     ;If height specified is 0, draws a 16x16 sprite. 
     
-    mva 0,VF ;clear collision flag
+    mva #0,VF ;clear collision flag
     
-		;copy I to temp_in and add shift
-		clc
-		lda I+1
-		adc #<[Chip8Code-$200]
-		sta temp_in
-		lda I
-		adc #>[Chip8Code-$200]
-		sta temp_in+1 
-		;now (temp_in) points to the sprite source address in 6502 memory
+        ;copy I to temp_in and add shift
+        clc
+        lda I+1
+        adc #<[Chip8Code-$200]
+        sta temp_in
+        lda I
+        adc #>[Chip8Code-$200]
+        sta temp_in+1 
+        ;now (temp_in) points to the sprite source address in 6502 memory
 
-		lda currentInstruction+1
-		and #$0F
-		
-		tax ;x keeps height of the sprite
-		lbeq SuperChip8Sprite ;if height=0 then it is SuperChip sprite (16x16)
+        lda currentInstruction+1
+        and #$0F
+        
+        tax ;x keeps height of the sprite
+        jeq SuperChip8Sprite ;if height=0 then it is SuperChip sprite (16x16)
     
     ;--------------------
     ;regular Chip8 sprite
-      	
-		;clear sprite buffer
-		   ;it is OK to clear only odd bytes as even ones will be 
-		   ;filled with the sprite 
-		   ;[LAME!!!] it could be done in a loop where exact number of lines is cleared. 
-		   ;If speed is the issue replace it with the proper code
-		   ;Most docs say sprites might be max 8 lines high, but I doubt it.
-		   ;I suppose they could be 16 lines high.
-		lda #0
-		sta [spriteBuffer+1*2-1]
-		sta [spriteBuffer+2*2-1]
-		sta [spriteBuffer+3*2-1]
-		sta [spriteBuffer+4*2-1]
-		sta [spriteBuffer+5*2-1]
-		sta [spriteBuffer+6*2-1]
-		sta [spriteBuffer+7*2-1]
-		sta [spriteBuffer+8*2-1]
-		sta [spriteBuffer+9*2-1]
-		sta [spriteBuffer+10*2-1]
-		sta [spriteBuffer+11*2-1]
-		sta [spriteBuffer+12*2-1]
-		sta [spriteBuffer+13*2-1]
-		sta [spriteBuffer+14*2-1]
-		sta [spriteBuffer+15*2-1]
-		
-		;copy sprite to the buffer
-		moveq.w spriteBuffer,temp_out
-		
+          
+        ;clear sprite buffer
+           ;it is OK to clear only odd bytes as even ones will be 
+           ;filled with the sprite 
+           ;[LAME!!!] it could be done in a loop where exact number of lines is cleared. 
+           ;If speed is the issue replace it with the proper code
+           ;Most docs say sprites might be max 8 lines high, but I doubt it.
+           ;I suppose they could be 16 lines high.
+        lda #0
+        .rept 16, #
+          sta [spriteBuffer+#*2+1]
+        .endr
+        
+        ;copy sprite to the buffer
+        mwa #spriteBuffer,temp_out
+        
     ldy #0
 loop02
-		lda (temp_in),y
-		sta (temp_out),y
-		add.q 1,temp_in
-		add.q 2,temp_out ;sprite buffer is 2 bytes wide (sprite + space for shift)
-		
-		dex
-    bne loop02		
+        lda (temp_in),y
+        sta (temp_out),y
+        inw temp_in
+        adw temp_out #2 ;sprite buffer is 2 bytes wide (sprite + space for shift)
+        
+        dex
+    bne loop02        
 
     ;shift sprite in buffer to the right position    
     ;if (X % 8 == 0) then shift not
@@ -942,52 +895,12 @@ loop02
     
     tax
 doRorC8
-    lbeq doNotRorC8
+    jeq doNotRorC8
     
-    lsr [spriteBuffer+2*1-2]
-    ror [spriteBuffer+2*1-1]
-
-    lsr [spriteBuffer+2*2-2]
-    ror [spriteBuffer+2*2-1]
-
-    lsr [spriteBuffer+2*3-2]
-    ror [spriteBuffer+2*3-1]
-
-    lsr [spriteBuffer+2*4-2]
-    ror [spriteBuffer+2*4-1]
-
-    lsr [spriteBuffer+2*5-2]
-    ror [spriteBuffer+2*5-1]
-
-    lsr [spriteBuffer+2*6-2]
-    ror [spriteBuffer+2*6-1]
-
-    lsr [spriteBuffer+2*7-2]
-    ror [spriteBuffer+2*7-1]
-
-    lsr [spriteBuffer+2*8-2]
-    ror [spriteBuffer+2*8-1]
-
-    lsr [spriteBuffer+2*9-2]
-    ror [spriteBuffer+2*9-1]
-
-    lsr [spriteBuffer+2*10-2]
-    ror [spriteBuffer+2*10-1]
-
-    lsr [spriteBuffer+2*11-2]
-    ror [spriteBuffer+2*11-1]
-
-    lsr [spriteBuffer+2*12-2]
-    ror [spriteBuffer+2*12-1]
-
-    lsr [spriteBuffer+2*13-2]
-    ror [spriteBuffer+2*13-1]
-
-    lsr [spriteBuffer+2*14-2]
-    ror [spriteBuffer+2*14-1]
-
-    lsr [spriteBuffer+2*15-2]
-    ror [spriteBuffer+2*15-1]
+    .rept 16, #
+      lsr [spriteBuffer+2*#-2]
+      ror [spriteBuffer+2*#-1]
+    .endr
 
     dex
     jmp doRorC8
@@ -1047,60 +960,60 @@ skip09
     
     
     ;move sprite from buffer to screen (2 bytes wide)
-    moveq.w spriteBuffer,temp_in
-		
-		lda currentInstruction+1 ;get sprite height
-		and #$0F
-		tax
+    mwa #spriteBuffer,temp_in
+        
+        lda currentInstruction+1 ;get sprite height
+        and #$0F
+        tax
 SpriteLoopFinal
     ldy #0
 
-		lda (temp_in),y
-		ora (temp_out),y
-		sta collisionByte ;for checking the collision
-		                  ;collision was when the screen byte EOR'ed and OR'er
-		                  ;with the sprite byte give the same result
-		
-		lda (temp_in),y
-		eor (temp_out),y
-		sta (temp_out),y
+        lda (temp_in),y
+        ora (temp_out),y
+        sta collisionByte ;for checking the collision
+                          ;collision was when the screen byte EOR'ed and OR'er
+                          ;with the sprite byte give the same result
+        
+        lda (temp_in),y
+        eor (temp_out),y
+        sta (temp_out),y
 
-		cmp collisionByte
-		beq noCollision1
-    mva 1,VF     ;there was a collision
+        cmp collisionByte
+        beq noCollision1
+    mva #1,VF     ;there was a collision
 noCollision1
     
     iny
-		
-		lda (temp_in),y
-		ora (temp_out),y
-		sta collisionByte ;for checking the collision
-		
-		lda (temp_in),y
-		eor (temp_out),y
-		sta (temp_out),y
+        
+        lda (temp_in),y
+        ora (temp_out),y
+        sta collisionByte ;for checking the collision
+        
+        lda (temp_in),y
+        eor (temp_out),y
+        sta (temp_out),y
 
-		cmp collisionByte
-		beq noCollision2
-    mva 1,VF     ;there was a collision
+        cmp collisionByte
+        beq noCollision2
+    mva #1,VF     ;there was a collision
 noCollision2
 
 
     
     lda SuperChipMode 
     beq narrowScreenC8 
-    add.q 8,temp_out ; screen is 16 bytes wide
+    adw temp_out #8 ; screen is 16 bytes wide
 narrowScreenC8
-    add.q 8,temp_out ; or only 8 bytes wide (LAME!!!)
+    adw temp_out #8 ; or only 8 bytes wide (LAME!!!)
 
     
-    add.q 2,temp_in  ; sprite in buffer is 3 bytes wide
+    adw temp_in #2  ; sprite in buffer is 3 bytes wide
 
-		dex
-		bne SpriteLoopFinal		
+        dex
+        bne SpriteLoopFinal        
     rts
-		
-    		
+        
+            
 SuperChip8Sprite
     ;16x16 sprite
 
@@ -1108,43 +1021,29 @@ SuperChip8Sprite
     ;it is OK to clear the third byte only as two other bytes
     ;will be copied from Chip8 memory anyway
     lda #0
-    sta [spriteBuffer+3*1-1]
-    sta [spriteBuffer+3*2-1]
-    sta [spriteBuffer+3*3-1]
-    sta [spriteBuffer+3*4-1]
-    sta [spriteBuffer+3*5-1]
-    sta [spriteBuffer+3*6-1]
-    sta [spriteBuffer+3*7-1]
-    sta [spriteBuffer+3*8-1]
-    sta [spriteBuffer+3*9-1]
-    sta [spriteBuffer+3*10-1]
-    sta [spriteBuffer+3*11-1]
-    sta [spriteBuffer+3*12-1]
-    sta [spriteBuffer+3*13-1]
-    sta [spriteBuffer+3*14-1]
-    sta [spriteBuffer+3*15-1]
-    sta [spriteBuffer+3*16-1]
-
+    .rept 16, #
+      sta [spriteBuffer+3*#-1]
+    .endr
     ;copy sprite to buffer
     
-    moveq.w spriteBuffer,temp_out
+    mwa #spriteBuffer,temp_out
 
-		ldx #0
+        ldx #0
 superSpriteLoop
     ldy #0
-		lda (temp_in),y
-		sta (temp_out),y
+        lda (temp_in),y
+        sta (temp_out),y
     iny
-		lda (temp_in),y
-		sta (temp_out),y
+        lda (temp_in),y
+        sta (temp_out),y
 
-    add.q 3,temp_out ; sprite buffer is 3 bytes wide
+    adw temp_out #3 ; sprite buffer is 3 bytes wide
     
-    add.q 2,temp_in  ; sprite itself is 2 bytes wide
+    adw temp_in #2  ; sprite itself is 2 bytes wide
 
-		inx
-		cpx #16          ; sprite is always 16 lines high
-    bne superSpriteLoop		
+        inx
+        cpx #16          ; sprite is always 16 lines high
+    bne superSpriteLoop        
     
     ;shift sprite in buffer the right number of pixels
     ;if (X % 8 == 0) then shift not
@@ -1161,71 +1060,13 @@ superSpriteLoop
     
     tax
 doRor
-    lbeq doNotRor
+    jeq doNotRor
     
-    lsr [spriteBuffer+3*1-3]
-    ror [spriteBuffer+3*1-2]
-    ror [spriteBuffer+3*1-1]
-    
-    lsr [spriteBuffer+3*2-3]
-    ror [spriteBuffer+3*2-2]
-    ror [spriteBuffer+3*2-1]
-    
-    lsr [spriteBuffer+3*3-3]
-    ror [spriteBuffer+3*3-2]
-    ror [spriteBuffer+3*3-1]
-
-    lsr [spriteBuffer+3*4-3]
-    ror [spriteBuffer+3*4-2]
-    ror [spriteBuffer+3*4-1]
-    
-    lsr [spriteBuffer+3*5-3]
-    ror [spriteBuffer+3*5-2]
-    ror [spriteBuffer+3*5-1]
-
-    lsr [spriteBuffer+3*6-3]
-    ror [spriteBuffer+3*6-2]
-    ror [spriteBuffer+3*6-1]
-
-    lsr [spriteBuffer+3*7-3]
-    ror [spriteBuffer+3*7-2]
-    ror [spriteBuffer+3*7-1]
-
-    lsr [spriteBuffer+3*8-3]
-    ror [spriteBuffer+3*8-2]
-    ror [spriteBuffer+3*8-1]
-
-    lsr [spriteBuffer+3*9-3]
-    ror [spriteBuffer+3*9-2]
-    ror [spriteBuffer+3*9-1]
-
-    lsr [spriteBuffer+3*10-3]
-    ror [spriteBuffer+3*10-2]
-    ror [spriteBuffer+3*10-1]
-
-    lsr [spriteBuffer+3*11-3]
-    ror [spriteBuffer+3*11-2]
-    ror [spriteBuffer+3*11-1]
-
-    lsr [spriteBuffer+3*12-3]
-    ror [spriteBuffer+3*12-2]
-    ror [spriteBuffer+3*12-1]
-
-    lsr [spriteBuffer+3*13-3]
-    ror [spriteBuffer+3*13-2]
-    ror [spriteBuffer+3*13-1]
-
-    lsr [spriteBuffer+3*14-3]
-    ror [spriteBuffer+3*14-2]
-    ror [spriteBuffer+3*14-1]
-
-    lsr [spriteBuffer+3*15-3]
-    ror [spriteBuffer+3*15-2]
-    ror [spriteBuffer+3*15-1]
-
-    lsr [spriteBuffer+3*16-3]
-    ror [spriteBuffer+3*16-2]
-    ror [spriteBuffer+3*16-1]
+    .rept 16, #
+      lsr [spriteBuffer+3*#-3]
+      ror [spriteBuffer+3*#-2]
+      ror [spriteBuffer+3*#-1]
+    .endr
 
     dex
     jmp doRor
@@ -1285,92 +1126,89 @@ skip06
     
     
     ;move sprite from buffer to screen (3 bytes wide)
-    moveq.w spriteBuffer,temp_in
-		ldx #0
+    mwa #spriteBuffer,temp_in
+        ldx #0
 superSpriteLoopFinal
     ldy #0
-		lda (temp_in),y
-		ora (temp_out),y
-		sta collisionByte
-		
-		lda (temp_in),y
-		eor (temp_out),y
-		sta (temp_out),y
-		cmp collisionByte
-		beq noCollision3
-		mva 1,VF
+        lda (temp_in),y
+        ora (temp_out),y
+        sta collisionByte
+        
+        lda (temp_in),y
+        eor (temp_out),y
+        sta (temp_out),y
+        cmp collisionByte
+        beq noCollision3
+        mva #1,VF
 noCollision3
     
     iny
-		lda (temp_in),y
-		ora (temp_out),y
-		sta collisionByte
+        lda (temp_in),y
+        ora (temp_out),y
+        sta collisionByte
 
-		lda (temp_in),y
-		eor (temp_out),y
-		sta (temp_out),y
-		cmp collisionByte
-		beq noCollision4
-		mva 1,VF
+        lda (temp_in),y
+        eor (temp_out),y
+        sta (temp_out),y
+        cmp collisionByte
+        beq noCollision4
+        mva #1,VF
 noCollision4    
 
     iny
-		lda (temp_in),y
-		ora (temp_out),y
-		sta collisionByte
+        lda (temp_in),y
+        ora (temp_out),y
+        sta collisionByte
 
-		lda (temp_in),y
-		eor (temp_out),y
-		sta (temp_out),y
-		cmp collisionByte
-		beq noCollision5
-		mva 1,VF
+        lda (temp_in),y
+        eor (temp_out),y
+        sta (temp_out),y
+        cmp collisionByte
+        beq noCollision5
+        mva #1,VF
 noCollision5
 
     lda SuperChipMode ;theoretically it is always SuperChipMode
     beq narrowScreen  ;but some docs say SuperChip instructions can be used in Chip 8 mode, too
-    add.q 8,temp_out ; screen is 16 bytes wide
+    adw temp_out #8 ; screen is 16 bytes wide
 narrowScreen
-    add.q 8,temp_out ; or only 8 bytes wide (LAME!!!)
+    adw temp_out #8 ; or only 8 bytes wide (LAME!!!)
 
     
-    add.q 3,temp_in  ; sprite in buffer is 3 bytes wide
+    adw temp_in #3  ; sprite in buffer is 3 bytes wide
 
-		inx
-		cpx #16          ; sprite is always 16 lines high
-    bne superSpriteLoopFinal		
+        inx
+        cpx #16          ; sprite is always 16 lines high
+    bne superSpriteLoopFinal        
     
     rts
 ;-----------------------------------------------------
 ;-----------------------------------------------------
-Chip8.EXXX
+Chip8_EXXX
     lda currentInstruction+1
     cmp #$a1
-    beq skup.k
+    beq skup_k
     cmp #$9e
-    beq skpr.k 
+    beq skpr_k 
 
-		;apparently an error so halt...
-		HALT $37
+        ;apparently an error so halt...
+        HALT $37
     rts
 
-skup.k
+skup_k
     
-    ;eka1  	 skup k  	 skip if key (register rk) not pressed
+    ;eka1       skup k       skip if key (register rk) not pressed
     lda currentInstruction
     and #$0F
     tax
     lda V0,X
     tax
     lda keyboardGrid,X
-    bne skup.Pressed
-skup.notPressed    
-		inc.PC ;skip the next instruction
-skup.Pressed
+    sne:inc_PC ;skip if notPressed
     rts
     ;------------
-skpr.k
- ;ek9e  	 skpr k  	 skip if key (register rk) pressed
+skpr_k
+ ;ek9e       skpr k       skip if key (register rk) pressed
     
     lda currentInstruction
     and #$0F
@@ -1378,47 +1216,44 @@ skpr.k
     lda V0,X
     tax
     lda keyboardGrid,X
-    beq skpr.notPressed
-skpr.Pressed    
-		inc.PC ;skip the next instruction
-skpr.notPressed
-		;do not skip the next instruction
+    seq:inc_PC ;skip if notPressed
+
     rts
 
 ;-----------------------------------------------------
 ;-----------------------------------------------------
-Chip8.FXXX
-		lda currentInstruction+1
-		cmp #$07
-		lbeq fr07
-		cmp #$0a
-		lbeq fr0a
-		cmp #$15
-		lbeq fr15
-		cmp #$18
-		lbeq fr18
-		cmp #$1E
-		beq fr1E
-		cmp #$29
-		lbeq fr29
-		cmp #$30
-		lbeq fr30
-		cmp #$33
-		lbeq fr33
-		cmp #$55
-		lbeq fr55
-		cmp #$65
-		beq fr65
-		cmp #$75
-		lbeq fr75
-		cmp #$85
-		lbeq fr85
-		
-		HALT
+Chip8_FXXX
+        lda currentInstruction+1
+        cmp #$07
+        jeq fr07
+        cmp #$0a
+        jeq fr0a
+        cmp #$15
+        jeq fr15
+        cmp #$18
+        jeq fr18
+        cmp #$1E
+        beq fr1E
+        cmp #$29
+        jeq fr29
+        cmp #$30
+        jeq fr30
+        cmp #$33
+        jeq fr33
+        cmp #$55
+        jeq fr55
+        cmp #$65
+        beq fr65
+        cmp #$75
+        jeq fr75
+        cmp #$85
+        jeq fr85
+        
+        HALT
     rts
     
 fr1E
-    ;fr1e  	 adi vr  	 add register vr to the index register
+    ;fr1e       adi vr       add register vr to the index register
     lda currentInstruction
     and #$0F
     tax
@@ -1426,13 +1261,11 @@ fr1E
     clc
     adc I+1
     sta I+1
-    bcc skip07
-    inc I
-skip07
+    scc:inc I
     rts
 ;------------------
 fr65 
-    ;fx65  	 ldr v0-vr  	 load registers v0-vr from location I onwards
+    ;fx65       ldr v0-vr       load registers v0-vr from location I onwards
     ;I is incremented to point to the next location on. e.g. I = I + r + 1
 
     lda currentInstruction
@@ -1440,19 +1273,19 @@ fr65
     tay
     tax ;stored for later use (I=I+r+1), X=r
 
-		clc
-		lda I+1
-		adc #<[Chip8Code-$200]
-		sta temp_in
-		lda I
-		adc #>[Chip8Code-$200]
-		sta temp_in+1 
+    clc
+    lda I+1
+    adc #<[Chip8Code-$200]
+    sta temp_in
+    lda I
+    adc #>[Chip8Code-$200]
+    sta temp_in+1 
 
-ldrLoop    
-    lda (temp_in),y
-    sta V0,y
-    dey
-    bpl ldrLoop 
+@    
+      lda (temp_in),y
+      sta V0,y
+      dey
+    bpl @- 
     
     ;increment I
     ;WARNING! Some docs say it is not incrementing!!!
@@ -1469,36 +1302,35 @@ ldrLoop
 ;    inc I
 ;skip08
 
-
     rts
     
-fr55  	     
-    ;fr55  	 str v0-vr  	 store registers v0-vr at location I onwards  	 
+fr55           
+    ;fr55       str v0-vr       store registers v0-vr at location I onwards       
     ;I is incremented to point to the next location on. e.g. I = I + r + 1    
     ;other docs say I is NOT incremented and I will stick to this option
     
     ;move I to temp_out
-		clc
-		lda I+1
-		adc #<[Chip8Code-$200]
-		sta temp_out
-		lda I
-		adc #>[Chip8Code-$200]
-		sta temp_out+1
-		
-		lda currentInstruction
-		and #$0F
-		tay
-srtV0.VRLoop
-		lda V0,y
-		sta (temp_out),y
-		dey
-		bpl srtV0.VRLoop
-		 
+    clc
+    lda I+1
+    adc #<[Chip8Code-$200]
+    sta temp_out
+    lda I
+    adc #>[Chip8Code-$200]
+    sta temp_out+1
+    
+    lda currentInstruction
+    and #$0F
+    tay
+@
+      lda V0,y
+      sta (temp_out),y
+      dey
+    bpl @-
+         
     rts
 
 fr15
-    ;fr15  	 sdelay vr  	 set the delay timer to vr
+    ;fr15       sdelay vr       set the delay timer to vr
     lda currentInstruction
     and #$0F
     tax
@@ -1508,7 +1340,7 @@ fr15
     rts
     
 fr07
-    ;fr07  	 gdelay vr  	 get delay timer into vr
+    ;fr07       gdelay vr       get delay timer into vr
 
     lda currentInstruction
     and #$0F
@@ -1519,7 +1351,7 @@ fr07
     rts
     
 fr18
-    ;fr18  	 ssound vr  	 set the sound timer to vr
+    ;fr18       ssound vr       set the sound timer to vr
     lda currentInstruction
     and #$0F
     tax
@@ -1527,9 +1359,10 @@ fr18
     sta soundTimer
     
     rts
+
 fr29
-    ; fr29  	 font vr  	 
-    ;point I to the sprite for hexadecimal character in vr  	 
+    ; fr29       font vr       
+    ;point I to the sprite for hexadecimal character in vr       
     ;Sprite is 5 bytes high
 
     lda currentInstruction
@@ -1559,7 +1392,7 @@ fr29
     rts    
     
 fr30
-    ; fr30  	 xfont vr  	 
+    ; fr30       xfont vr       
     ;point I to the sprite for hexadecimal character in vr
     ;Sprite is 10 bytes high,Super only
 
@@ -1591,13 +1424,13 @@ fr30
     rts    
 
 fr33
-    ;fr33  	 bcd vr  	 
+    ;fr33       bcd vr       
     ;store the bcd representation of register vr 
-    ;at location I,I+1,I+2  	 
+    ;at location I,I+1,I+2       
     ;Doesn't change I    
     ;IT IS NOT 6502 style BCD !!!
     
-    mva 0,decimal+1 ; older byte always equals 0
+    mva #0,decimal+1 ; older byte always equals 0
     
     lda currentInstruction
     and #$0F
@@ -1609,37 +1442,37 @@ fr33
     
     ;copy decimal result to the memory starting at I
     ;move I to temp_out
-		clc
-		lda I+1
-		adc #<[Chip8Code-$200]
-		sta temp_out
-		lda I
-		adc #>[Chip8Code-$200]
-		sta temp_out+1
+    clc
+    lda I+1
+    adc #<[Chip8Code-$200]
+    sta temp_out
+    lda I
+    adc #>[Chip8Code-$200]
+    sta temp_out+1
     
     ldy #2  ;3 digits
-fr33Loop
-    lda decimalResult+1,y
-    sta (temp_out),y
-    dey
-    bpl fr33Loop
+@
+      lda decimalResult+1,y
+      sta (temp_out),y
+      dey
+    bpl @-
     
     rts
 
 fr0a
-    ;fr0a  	 key vr  	 wait for for keypress,put key in register vr
+    ;fr0a       key vr       wait for for keypress,put key in register vr
     lda escapeFlag
     bne doNotWaitForKey
     lda #0
     ldy #15
 checkAllKeysLoop
     lda keyboardGrid,Y
-    bne fr0a.KeyPressed
+    bne fr0a_KeyPressed
     dey
     bpl checkAllKeysLoop
     bmi fr0a ;loop until something pressed
 
-fr0a.KeyPressed    
+fr0a_KeyPressed    
     ;in Y there is key pressed
     lda currentInstruction
     and #$0F
@@ -1652,50 +1485,50 @@ doNotWaitForKey
 fr75
     ;FX75 Save V0...VX (X<8) in the HP48 flags (***)
 
-    moveq.w HP48Flags,temp_out
-		
-		lda currentInstruction
-		and #$0F
-		tay
-fr75Loop
-		lda V0,y
-		sta (temp_out),y
-		dey
-		bpl fr75Loop
+    mwa #HP48Flags,temp_out
+        
+    lda currentInstruction
+    and #$0F
+    tay
+@
+      lda V0,y
+      sta (temp_out),y
+      dey
+    bpl @-
     rts
  
 fr85    
     ;FX85 Load V0...VX (X<8) from the HP48 flags (***)
-    moveq.w HP48Flags,temp_in
+    mwa #HP48Flags,temp_in
     
     lda currentInstruction
     and #$0F
     tay
 
-fr85Loop
-		lda (temp_out),y
-		sta V0,y
-		dey
-		bpl fr85Loop
+@
+      lda (temp_out),y
+      sta V0,y
+      dey
+    bpl @-
     rts
 ;------------------
 jumpTable
-    .word Chip8.0XXX
-    .word Chip8.1XXX
-    .word Chip8.2XXX
-    .word Chip8.3XXX
-    .word Chip8.4XXX
-    .word Chip8.5XXX
-    .word Chip8.6XXX
-    .word Chip8.7XXX
-    .word Chip8.8XXX
-    .word Chip8.9XXX
-    .word Chip8.AXXX
-    .word Chip8.BXXX
-    .word Chip8.CXXX
-    .word Chip8.DXXX
-    .word Chip8.EXXX
-    .word Chip8.FXXX
+    .word Chip8_0XXX
+    .word Chip8_1XXX
+    .word Chip8_2XXX
+    .word Chip8_3XXX
+    .word Chip8_4XXX
+    .word Chip8_5XXX
+    .word Chip8_6XXX
+    .word Chip8_7XXX
+    .word Chip8_8XXX
+    .word Chip8_9XXX
+    .word Chip8_AXXX
+    .word Chip8_BXXX
+    .word Chip8_CXXX
+    .word Chip8_DXXX
+    .word Chip8_EXXX
+    .word Chip8_FXXX
 ;==================================
 emulationInit
     jsr clearScreen
@@ -1703,14 +1536,14 @@ emulationInit
 
     lda DMACTLS
     sta screenWidth
-    mva 0,DMACTLS
+    mva #0,DMACTLS
     wait
-      jsr getConfig
-      jsr loadGame
+    jsr getConfig
+    jsr loadGame
     lda screenWidth
     sta DMACTLS
 
-    mva 0,superChipMode
+    mva #0,superChipMode
     
     ldx #15+2 ;V0-VF and I
 zeroRegisters
@@ -1721,18 +1554,18 @@ zeroRegisters
 
     sta escapeFlag
 
-    mva 8,screenWidth
+    mva #8,screenWidth
     
-    ;moveq.w $0002,PC ;all Chip 8 programs (I have) start at $0200
+    ;mwa #$0002,PC ;all Chip 8 programs (I have) start at $0200
     
     lda #<[$200-2]  ;-2 because it might be started from inside emulation loop
     sta PC+1        ; and always after instruction execution
     lda #>[$200-2]  ; PC gets incremented by 2
     sta PC
     
-    ;moveq.w Chip8Code,fetchAddress
-    moveq.w stackTop,stackPointer
-    vdl dl.Chip8,$01 ;return to Chip8 screen (just in case)
+    ;mwa #Chip8Code,fetchAddress
+    mwa #stackTop,stackPointer
+    vdl dl_Chip8,$01 ;return to Chip8 screen (just in case)
     POKEY
     
     rts
@@ -1743,22 +1576,18 @@ vint
     lda soundTimer
     beq noSound
     dec soundTimer
-    mva 197,AUDF1
-    mva $EF,AUDC1
-    jmp skip03
+    mva #197,AUDF1
+    mva #$EF,AUDC1
+    bne @+  ; JMP
 noSound
-    mva 0,AUDF1
-    mva 0,AUDC1
-
-skip03
+    mva #0,AUDF1
+    mva #0,AUDC1
+@
     lda delayTimer
-    beq skip04
-    dec delayTimer
-skip04
-
+    seq:dec delayTimer
 
     ;----------keyboard;----------
-    mva 0,escapeFlag
+    mva #0,escapeFlag
 
     ldx #15
     ;lda #0
@@ -1771,13 +1600,13 @@ clearGrid
     cmp #$ff
     bne somethingPressed
     ;no keyboard key pressed so clear keyboardGrid
-    jmp keyFinished
+    beq keyFinished  ; JMP
 
 somethingPressed
     lda KBCODE
     cmp #28 ;[ESCAPE]
     bne notEscape
-    mva 1,escapeFlag
+    mva #1,escapeFlag
 
 notEscape    
     ldx #15
@@ -1787,7 +1616,7 @@ checkKeyTableLoop
     dex
     bpl checkKeyTableLoop
 ;   no Chip8 key pressed
-    jmp keyFinished
+    bmi keyFinished  ; JMP
 
 keyFound    
     ;X contains offset in the Chip8KeyTable
@@ -1840,7 +1669,7 @@ JNotFire
 ;==================================
 dli ; Display List Interrupt
 ;==================================
-;purpose of this DLI is to slow down machine in Chip8 mode
+;the purpose of this DLI is to slow down machine in Chip8 mode
 ;and to make flickering less visible
     pha
     phx
@@ -1861,7 +1690,7 @@ dliLoop
 
 printHex
     ;prints 4 hexadecimal digits from valueHex
-    ;directly on screen location addressHex
+    ;directly to screen location temp_out
     
     ldy #0
     
@@ -1903,7 +1732,7 @@ valueHex
     .word 0
 tableHex 
     .sbyte "0123456789abcdef"
-;==================================
+
 ;--------------------------------------------------
 displayDecimal ;decimal (word)
 ;--------------------------------------------------
@@ -1915,74 +1744,37 @@ displayDecimal ;decimal (word)
 ;this version of the routine puts BCD like results
 ;and not Atari chars.
 
-	ldy #3  ; there will be 4 digits
+    ldy #3           ; there will be 4 digits
 NextDigit
-	ldx #16 ; 16-bit dividee so Rotate 16 times
-	lda #$00
+    ldx #16          ; 16-bit dividee so Rotate 16 times
+    lda #$00
 Rotate000
-	asl.w decimal
-	rol a		; scroll dividee
-			; (as highest byte - additional - byte is A)
-	cmp #10		; divider
-	bcc TooLittle000	; if A is smaller than divider
-				; there is nothing to substract
-	sbc #10		; divider
-	inc decimal     ; lowest bit set to 1
-			; because it is 0 and this is the fastest way
-TooLittle000	
+    aslw decimal
+    rol a            ; scroll dividee
+                     ; (as highest byte - additional - byte is A)
+    cmp #10          ; divider
+    bcc TooLittle000 ; if A is smaller than divider
+                     ; there is nothing to substract
+    sbc #10          ; divider
+    inc decimal      ; lowest bit set to 1
+                     ; because it is 0 and this is the fastest way
+TooLittle000    
   dex
-	bne Rotate000	; and Rotate 16 times, Result will be in decimal
-	tax		; and the rest in A
-			; (and it goes to X because
-			; it is our decimal digit)
-	lda digits,x
-	sta decimalresult,y
-	dey
-	bpl NextDigit	; Result again /10 and we have next digit
-
-
+    bne Rotate000    ; and Rotate 16 times, Result will be in decimal
+    tax              ; and the rest in A
+                     ; (and it goes to X because it is our decimal digit)
+    lda digits,x
+    sta decimalresult,y
+    dey
+    bpl NextDigit    ; Result again /10 and we have next digit
 rightnumber
-; now cut leading zeroes (002 goes   2)
-;	lda decimalresult
-;	cmp zero
-;	bne decimalend
-;	lda space
-;	sta decimalresult
 
-;	lda decimalresult+1
-;	cmp zero
-;	bne decimalend
-;	lda space
-;	sta decimalresult+1
-
-;	lda decimalresult+2
-;	cmp zero
-;	bne DecimalEnd
-;	lda space
-;	sta decimalresult+2
-
-;DecimalEnd
-;	; displaying
-;	move.w displayposition,temp_out
-;	ldy #3
-;displayloop
-;	lda decimalresult,y
-; 	sta (temp_out),y
-;	dey
-;	bpl displayloop
-
-	rts
+    rts
 
 
 ;-------decimal constans
-;digits		.sbyte "0123456789"
-;zero 		.sbyte "0"
-;nineplus 	.sbyte ['9+1]
-;space  		.sbyte " "
-
-digits		.byte 0,1,2,3,4,5,6,7,8,9
-;zero 		.byte 0
-nineplus 	.byte 9+1
+digits    .byte 0,1,2,3,4,5,6,7,8,9
+nineplus  .byte 9+1
 ;wariables
 decimal   .word 0
 decimalresult
@@ -1990,8 +1782,8 @@ decimalresult
 ;---------------------------------------------------
 debugPrint
     ;print fetchAddress
-    move.w fetchAddress,valueHex
-    moveq.w textScreen,temp_out
+    mwa #fetchAddress valueHex
+    mwa #textScreen,temp_out
     jsr printHex
      
     ;print currentInstruction
@@ -1999,7 +1791,7 @@ debugPrint
     sta valueHex+1           ;low endian
     lda currentInstruction+1
     sta valueHex
-    moveq.w textScreen+5,temp_out
+    mwa #textScreen+5,temp_out
     jsr printHex
 
     ;print PC
@@ -2007,7 +1799,7 @@ debugPrint
     sta valueHex+1
     lda PC+1
     sta valueHex
-    moveq.w textScreen+10,temp_out
+    mwa #textScreen+10,temp_out
     jsr printHex
 
     rts
@@ -2028,9 +1820,9 @@ delayChip8
     ldx delay
     beq skipDelay
 delayLoop
-    nop
-		dex
-		bne delayLoop
+      nop
+      dex
+    bne delayLoop
 skipDelay
     rts
 ;------------------------------
@@ -2082,12 +1874,9 @@ keyboardGrid
     ;keys 0,1,2,3,4,...,F
     ;0 = key not pressed
     ;1 = key pressed
-		.byte 0,0,0,0,0,0,0,0
-		.byte 0,0,0,0,0,0,0,0
-		.byte 0,0 ;to allow easier initialisation
+    :16+2 .byte 0  ; 2 additional bytes to allow easier initialisation
 joystickConversion
     .byte 2,8,4,6,5 ;default
-    ;.byte 1,2,3,$C,$A
     ; up down left right trigger
     ; these bytes are set by readConfig
     ; the above are default settings that work for few games
@@ -2096,23 +1885,14 @@ delay
     .byte $80
 stackTop 
     ;16 levels of stack
-		.word 0,0,0,0,0,0,0,0
-		.word 0,0,0,0,0,0,0,0
-    ;aah, just to be safe
-    .word 0,0,0,0,0,0,0,0
+    :16+8 .word 0  ;aah, 8 additional just to be safe
 ;==================================
 spriteBuffer
     ;3x16 bytes - largest sprite size possible (2x16) + shift buffer
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
+    :3*16 .byte 0
 ;==================================
 HP48Flags
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes
-    .byte 0,0,0,0,0,0,0,0 ;8 bytes ;one doc says it is only 8, but who knows???
+    :2*8 .byte 0  ; one doc says it is only 8, but who knows???
 ;==================================
 escapeFlag ;1=quit to Title
     .byte 0
@@ -2125,7 +1905,7 @@ chip8Code
     ;.incbin#Joust23.ch8   
     ;.incbin#PONG
     ;.incbin#BREAKOUT
-    * = * + $1000
+    org * + $1000
     ; four kilobytes of space for Chip8 programs
 
     ;font must be visible in the address space of Chip8 virtual machine
@@ -2171,8 +1951,8 @@ SChip8Font ;Super Chip 8 font set:
     .byte $F0, $F0, $80, $80, $F0, $F0, $80, $80, $80, $80 ; F
 ;==================================
     
-    * = $8000
-dl.SuperChip8  
+     org $8000
+dl_SuperChip8  
     .byte $70,$70,$70
     .byte $4b
     .word screen
@@ -2184,9 +1964,9 @@ dl.SuperChip8
     .byte 0,2,0,2,0,2,0,2
     
     .byte $41
-    .word dl.SuperChip8
+    .word dl_SuperChip8
 ;==================================
-dl.Chip8  
+dl_Chip8  
     .byte $70,$70,$70+$80
     .byte $49
     .word screen
@@ -2199,7 +1979,7 @@ dl.Chip8
 
 
     .byte $41
-    .word dl.Chip8
+    .word dl_Chip8
 ;==================================
 textScreen
     .sbyte "                                " ;32 bytes
@@ -2211,10 +1991,6 @@ helpScreen
     .sbyte "  [A][0][B][F]     [Z][X][C][V] " ;32 bytes
 screen
     
-    * = GOADR
-    ;* = INITADR
-    .word start
-    
-    .opt list
+    run start
     
     
