@@ -53,13 +53,13 @@
     .zpvar VD    .byte
     .zpvar VE    .byte
     .zpvar VF    .byte ;carry and collision register
-    .zpvar I     .word ;Chip 8 type - low endian
-    .zpvar PC    .word ;Chip 8 type - low endian
+    .zpvar I     .word ;Chip 8 type - big endian
+    .zpvar PC    .word ;Chip 8 type - big endian
     .zpvar soundTimer .byte
     .zpvar delayTimer .byte
     .zpvar superChipMode .byte
 ;==================================
-;emulator registers - 6502 type - big endian
+;emulator registers - 6502 type - little endian
     .zpvar fetchAddress .word
     .zpvar stackPointer .word
     .zpvar currentInstruction .word
@@ -75,23 +75,21 @@
   
     org $3000
     jmp start
-       .include#io_OMC65.s65
-       .include#Chip8IO.s65
+    icl 'lib/io_lib.asm'
+    icl 'Chip8IO.asm'
 
 start
 
-    mva #0,COLPF2S ;nice black background
-    mva #0,selectedFile
+    mva #0 COLOR2 ;nice black background
+    mva #0 selectedFile
   
     ;vdl dl_fileSelector,$01
 
-    lda DMACTLS
-    sta screenWidth
-    mva #0,DMACTLS
+    mva DMACTLS screenWidth
+    mva #0 DMACTLS
     wait
     jsr getDir
-    lda screenWidth
-    sta DMACTLS
+    mva screenWidth DMACTLS
 
 lateStart
     ;hold till keys released
@@ -158,9 +156,9 @@ executeInstruction
 
     lda currentInstruction
     and #$f0
-    lsr a
-    lsr a
-    lsr a
+    lsr
+    lsr
+    lsr
     tax
 
     lda jumpTable,x
@@ -204,14 +202,14 @@ Chip8_0XXX
     rts
 ;-------------------    
 setSuperMode
-    mva #1,superChipMode
-    mva #16,screenWidth
+    mva #1 superChipMode
+    mva #16 screenWidth
     vdl dl_SuperChip8
     rts
 ;-------------------    
 setChip8Mode    
-    mva #0,superChipMode
-    mva #8,screenWidth
+    mva #0 superChipMode
+    mva #8 screenWidth
     vdl dl_Chip8
     rts
 ;-------------------    
@@ -232,7 +230,7 @@ clearScreen
     ;it will need a change if speed is the issue
 
     ldy #0
-    mwa #screen,temp_out
+    mwa #screen temp_out
 @
         lda #0
         ;lda RANDOM
@@ -257,8 +255,8 @@ scrollDown
                              ;normal value    
     
 repeatScroll
-    mwa #screen+16*62,temp_in
-    mwa #screen+16*63,temp_out
+    mwa #screen+16*62 temp_in
+    mwa #screen+16*63 temp_out
     ldx #[64-1]
     
 scrollScreenLoop    
@@ -276,7 +274,7 @@ scrollLineLoop
     bne scrollScreenLoop
 
     ;clear the first line
-    mwa #screen,temp_out
+    mwa #screen temp_out
     lda #0
     ldy #15
 clearFirstLineLoop
@@ -294,9 +292,9 @@ scrollLeft
     ;what a shame it is not 8 pixels...
     ;SuperChip8 ONLY!!!
     
-    mwa #screen,temp_out
+    mwa #screen temp_out
    
-    mva #64,temp_in ;lines counter
+    mva #64 temp_in ;lines counter
 scrollLeftNextLine    
     ldy #0
 scrollLeftLineLoop    
@@ -334,9 +332,9 @@ scrollRight
     ;what a shame it is not 8 pixels...
     ;SuperChip8 ONLY!!!
     
-    mwa #screen,temp_out
+    mwa #screen temp_out
    
-    mva #64,temp_in ;lines counter
+    mva #64 temp_in ;lines counter
 scrollRightNextLine    
     ldy #15
 scrollRightLineLoop    
@@ -393,7 +391,6 @@ Chip8_1XXX
 ;------------------
 Chip8_2XXX
     ;2xxx       jsr xxx       jump to subroutine at address xxx
-    .LOCAL
     
     ;save current PC on stack
     adw stackPointer #2    ;stack pointer up
@@ -458,10 +455,7 @@ Chip8_5XXX
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         tya
         cmp V0,X
@@ -502,7 +496,7 @@ Chip8_8XXX
 
     lda currentInstruction+1
     and #$0F
-    asl a     ;*2 because JumpTable is 2 bytes wide
+    asl     ;*2 because JumpTable is 2 bytes wide
     tax
     lda C8_8XXX_JumpTable,x
     sta JumpPad
@@ -517,10 +511,7 @@ C8_8XX0
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         tay
@@ -538,10 +529,7 @@ C8_8XX1
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         tay
@@ -561,10 +549,7 @@ C8_8XX2
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         tay
@@ -583,10 +568,7 @@ C8_8XX3
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         tay
@@ -604,14 +586,11 @@ C8_8XX3
 C8_8XX4
     ;8ry4       add vr,vy       add register vy to vr,carry in vf  
     
-    mva #0,VF
+    mva #0 VF
         ;load VY
       lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         sta temp_in
@@ -625,7 +604,7 @@ C8_8XX4
       adc temp_in 
       sta V0,X
       bcc NoCarry_8XX4
-      mva #1,VF
+      mva #1 VF
 NoCarry_8XX4 
     rts
 
@@ -634,15 +613,12 @@ C8_8XX5
     ; vf set to 1 if borrows
     ; VX = VX - VY
 
-        mva #0,VF
+        mva #0 VF
         
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         sta temp_in
@@ -656,7 +632,7 @@ C8_8XX5
       sbc temp_in
       sta V0,X
       bcc NoCarry_8XX5
-      mva #1,VF
+      mva #1 VF
 NoCarry_8XX5
     rts
 
@@ -664,7 +640,7 @@ C8_8XX6
     ;8r06       shr vr       shift register vr right, 
     ;bit 0 goes into register vf
 
-      mva #0,VF
+      mva #0 VF
 
         ;load VX
         lda currentInstruction
@@ -672,11 +648,11 @@ C8_8XX6
         tax
 
         lda V0,X
-      lsr a
+      lsr
       sta V0,X
 
       bcc NoCarry_8XX6
-      mva #1,VF
+      mva #1 VF
 NoCarry_8XX6
     rts
 
@@ -686,16 +662,13 @@ C8_8XX7
     ;vf set to 1 if borrows
     ;VX=VY-VX
 
-      mva #0,VF
+      mva #0 VF
 
 
         ;load VY
         lda currentInstruction+1
         and #$F0
-        lsr a
-        lsr a
-        lsr a
-        lsr a
+        :4 lsr
         tax
         lda V0,X
         tay
@@ -710,7 +683,7 @@ C8_8XX7
       sbc V0,X     ;-VX
       sta V0,X     ;VX=
       bcc NoCarry_8XX7
-      mva #1,VF
+      mva #1 VF
 NoCarry_8XX7
     rts
 
@@ -729,12 +702,12 @@ C8_8XYe
     ;8r0e       shl vr       shift register vr left,bit 7 goes into register vf
         ;let's first ignore Y (although in ANT game it is set to 5)
         
-        mva #0,VF
+        mva #0 VF
         lda currentInstruction
         and #$0F
         tax
         rol V0,X
-        scc:mva #1,VF
+        scc:mva #1 VF
         rts
 
 ;------     
@@ -763,10 +736,7 @@ Chip8_9XXX
     ;load VY
     lda currentInstruction+1
     and #$F0
-    lsr a
-    lsr a
-    lsr a
-    lsr a
+    :4 lsr
     tax
     lda V0,X
     tay
@@ -834,7 +804,7 @@ Chip8_DXXX
     ;All drawing is xor drawing (e.g. it toggles the screen pixels)
     ;If height specified is 0, draws a 16x16 sprite. 
     
-    mva #0,VF ;clear collision flag
+    mva #0 VF ;clear collision flag
     
         ;copy I to temp_in and add shift
         clc
@@ -864,11 +834,11 @@ Chip8_DXXX
            ;I suppose they could be 16 lines high.
         lda #0
         .rept 16, #
-          sta [spriteBuffer+#*2+1]
+          sta spriteBuffer+#*2+1
         .endr
         
         ;copy sprite to the buffer
-        mwa #spriteBuffer,temp_out
+        mwa #spriteBuffer temp_out
         
     ldy #0
 loop02
@@ -898,8 +868,8 @@ doRorC8
     jeq doNotRorC8
     
     .rept 16, #
-      lsr [spriteBuffer+2*#-2]
-      ror [spriteBuffer+2*#-1]
+      lsr spriteBuffer+2*#-2
+      ror spriteBuffer+2*#-1
     .endr
 
     dex
@@ -911,10 +881,7 @@ doNotRorC8
     ;get YPOS
     lda currentInstruction+1
     and #$f0
-    lsr a
-    lsr a
-    lsr a
-    lsr a
+    :4 lsr
     tax
     lda V0,x
     sta temp_out
@@ -936,9 +903,7 @@ multiplyBy8C8
    
     ;get XPOS
     lda temp_in ;there was XPOS value stored here
-    lsr a
-    lsr a
-    lsr a
+    :3 lsr
     
     clc 
     adc temp_out
@@ -960,7 +925,7 @@ skip09
     
     
     ;move sprite from buffer to screen (2 bytes wide)
-    mwa #spriteBuffer,temp_in
+    mwa #spriteBuffer temp_in
         
         lda currentInstruction+1 ;get sprite height
         and #$0F
@@ -980,7 +945,7 @@ SpriteLoopFinal
 
         cmp collisionByte
         beq noCollision1
-    mva #1,VF     ;there was a collision
+    mva #1 VF     ;there was a collision
 noCollision1
     
     iny
@@ -995,7 +960,7 @@ noCollision1
 
         cmp collisionByte
         beq noCollision2
-    mva #1,VF     ;there was a collision
+    mva #1 VF     ;there was a collision
 noCollision2
 
 
@@ -1022,11 +987,11 @@ SuperChip8Sprite
     ;will be copied from Chip8 memory anyway
     lda #0
     .rept 16, #
-      sta [spriteBuffer+3*#-1]
+      sta spriteBuffer+3*#-1
     .endr
     ;copy sprite to buffer
     
-    mwa #spriteBuffer,temp_out
+    mwa #spriteBuffer temp_out
 
         ldx #0
 superSpriteLoop
@@ -1063,9 +1028,9 @@ doRor
     jeq doNotRor
     
     .rept 16, #
-      lsr [spriteBuffer+3*#-3]
-      ror [spriteBuffer+3*#-2]
-      ror [spriteBuffer+3*#-1]
+      lsr spriteBuffer+3*#-3
+      ror spriteBuffer+3*#-2
+      ror spriteBuffer+3*#-1
     .endr
 
     dex
@@ -1077,10 +1042,7 @@ doNotRor
     ;get YPOS
     lda currentInstruction+1
     and #$f0
-    lsr a
-    lsr a
-    lsr a
-    lsr a
+    :4 lsr
     tax
     lda V0,x
     sta temp_out
@@ -1102,9 +1064,7 @@ multiplyBy8
    
     ;get XPOS
     lda temp_in ;there was XPOS value stored here
-    lsr a
-    lsr a
-    lsr a
+    :3 lsr
     
     clc 
     adc temp_out
@@ -1126,7 +1086,7 @@ skip06
     
     
     ;move sprite from buffer to screen (3 bytes wide)
-    mwa #spriteBuffer,temp_in
+    mwa #spriteBuffer temp_in
         ldx #0
 superSpriteLoopFinal
     ldy #0
@@ -1139,7 +1099,7 @@ superSpriteLoopFinal
         sta (temp_out),y
         cmp collisionByte
         beq noCollision3
-        mva #1,VF
+        mva #1 VF
 noCollision3
     
     iny
@@ -1152,7 +1112,7 @@ noCollision3
         sta (temp_out),y
         cmp collisionByte
         beq noCollision4
-        mva #1,VF
+        mva #1 VF
 noCollision4    
 
     iny
@@ -1165,7 +1125,7 @@ noCollision4
         sta (temp_out),y
         cmp collisionByte
         beq noCollision5
-        mva #1,VF
+        mva #1 VF
 noCollision5
 
     lda SuperChipMode ;theoretically it is always SuperChipMode
@@ -1374,8 +1334,8 @@ fr29
     ;mul by 1
     sta temp_in
     ;mul by 4
-    asl a
-    asl a
+    asl
+    asl
     ;add multipl. by 2
     clc
     adc temp_in
@@ -1403,11 +1363,11 @@ fr30
     ;multiply A by 10
     
     ;mul by 2
-    asl a
+    asl
     sta temp_in
     ;mul by 8
-    asl a
-    asl a
+    asl
+    asl
     ;add multipl. by 2
     clc
     adc temp_in
@@ -1430,7 +1390,7 @@ fr33
     ;Doesn't change I    
     ;IT IS NOT 6502 style BCD !!!
     
-    mva #0,decimal+1 ; older byte always equals 0
+    mva #0 decimal+1 ; older byte always equals 0
     
     lda currentInstruction
     and #$0F
@@ -1485,7 +1445,7 @@ doNotWaitForKey
 fr75
     ;FX75 Save V0...VX (X<8) in the HP48 flags (***)
 
-    mwa #HP48Flags,temp_out
+    mwa #HP48Flags temp_out
         
     lda currentInstruction
     and #$0F
@@ -1499,7 +1459,7 @@ fr75
  
 fr85    
     ;FX85 Load V0...VX (X<8) from the HP48 flags (***)
-    mwa #HP48Flags,temp_in
+    mwa #HP48Flags temp_in
     
     lda currentInstruction
     and #$0F
@@ -1536,14 +1496,14 @@ emulationInit
 
     lda DMACTLS
     sta screenWidth
-    mva #0,DMACTLS
+    mva #0 DMACTLS
     wait
     jsr getConfig
     jsr loadGame
     lda screenWidth
     sta DMACTLS
 
-    mva #0,superChipMode
+    mva #0 superChipMode
     
     ldx #15+2 ;V0-VF and I
 zeroRegisters
@@ -1554,7 +1514,7 @@ zeroRegisters
 
     sta escapeFlag
 
-    mva #8,screenWidth
+    mva #8 screenWidth
     
     ;mwa #$0002,PC ;all Chip 8 programs (I have) start at $0200
     
@@ -1564,9 +1524,9 @@ zeroRegisters
     sta PC
     
     ;mwa #Chip8Code,fetchAddress
-    mwa #stackTop,stackPointer
+    mwa #stackTop stackPointer
     vdl dl_Chip8,$01 ;return to Chip8 screen (just in case)
-    POKEY
+    POKEY_INIT
     
     rts
 ;==================================
@@ -1576,18 +1536,18 @@ vint
     lda soundTimer
     beq noSound
     dec soundTimer
-    mva #197,AUDF1
-    mva #$EF,AUDC1
+    mva #197 AUDF1
+    mva #$EF AUDC1
     bne @+  ; JMP
 noSound
-    mva #0,AUDF1
-    mva #0,AUDC1
+    mva #0 AUDF1
+    mva #0 AUDC1
 @
     lda delayTimer
     seq:dec delayTimer
 
     ;----------keyboard;----------
-    mva #0,escapeFlag
+    mva #0 escapeFlag
 
     ldx #15
     ;lda #0
@@ -1606,7 +1566,7 @@ somethingPressed
     lda KBCODE
     cmp #28 ;[ESCAPE]
     bne notEscape
-    mva #1,escapeFlag
+    mva #1 escapeFlag
 
 notEscape    
     ldx #15
@@ -1695,10 +1655,7 @@ printHex
     ldy #0
     
     lda valueHex+1
-    lsr A
-    lsr A
-    lsr A
-    lsr A
+    :4 lsr
     tax
     lda tableHex,x
     sta (temp_out),y
@@ -1712,10 +1669,7 @@ printHex
 
     iny
     lda valueHex
-    lsr A
-    lsr A
-    lsr A
-    lsr A
+    :4 lsr
     tax
     lda tableHex,x
     sta (temp_out),y
@@ -1731,7 +1685,7 @@ printHex
 valueHex 
     .word 0
 tableHex 
-    .sbyte "0123456789abcdef"
+    dta  d"0123456789abcdef"
 
 ;--------------------------------------------------
 displayDecimal ;decimal (word)
@@ -1750,7 +1704,7 @@ NextDigit
     lda #$00
 Rotate000
     aslw decimal
-    rol a            ; scroll dividee
+    rol              ; scroll dividee
                      ; (as highest byte - additional - byte is A)
     cmp #10          ; divider
     bcc TooLittle000 ; if A is smaller than divider
@@ -1783,15 +1737,15 @@ decimalresult
 debugPrint
     ;print fetchAddress
     mwa #fetchAddress valueHex
-    mwa #textScreen,temp_out
+    mwa #textScreen temp_out
     jsr printHex
      
     ;print currentInstruction
-    lda currentInstruction   ;big endian
-    sta valueHex+1           ;low endian
+    lda currentInstruction   ;little endian
+    sta valueHex+1           ;big endian
     lda currentInstruction+1
     sta valueHex
-    mwa #textScreen+5,temp_out
+    mwa #textScreen+5 temp_out
     jsr printHex
 
     ;print PC
@@ -1799,7 +1753,7 @@ debugPrint
     sta valueHex+1
     lda PC+1
     sta valueHex
-    mwa #textScreen+10,temp_out
+    mwa #textScreen+10 temp_out
     jsr printHex
 
     rts
@@ -1956,7 +1910,7 @@ dl_SuperChip8
     .byte $70,$70,$70
     .byte $4b
     .word screen
-    63: .byte $0b  ; 64 lines
+    :63 dta $0b  ; 64 lines
 
     .byte $70,$70
     .byte $42
@@ -1970,7 +1924,7 @@ dl_Chip8
     .byte $70,$70,$70+$80
     .byte $49
     .word screen
-    31: .byte $09  ; 32 lines
+    :31 .byte $09  ; 32 lines
     
     .byte $70,$70
     .byte $42
@@ -1982,15 +1936,14 @@ dl_Chip8
     .word dl_Chip8
 ;==================================
 textScreen
-    .sbyte "                                " ;32 bytes
+    dta d"                                " ;32 bytes
 helpScreen
-    .sbyte "   Chip8 keys       Atari keys  " ;32 bytes
-    .sbyte "  [1][2][3][C]     [1][2][3][4] " ;32 bytes
-    .sbyte "  [4][5][6][D] --> [Q][W][E][R] " ;32 bytes
-    .sbyte "  [7][8][9][E]     [A][S][D][F] " ;32 bytes
-    .sbyte "  [A][0][B][F]     [Z][X][C][V] " ;32 bytes
+    dta d"   Chip8 keys       Atari keys  " ;32 bytes
+    dta d"  [1][2][3][C]     [1][2][3][4] " ;32 bytes
+    dta d"  [4][5][6][D] --> [Q][W][E][R] " ;32 bytes
+    dta d"  [7][8][9][E]     [A][S][D][F] " ;32 bytes
+    dta d"  [A][0][B][F]     [Z][X][C][V] " ;32 bytes
 screen
     
     run start
-    
     

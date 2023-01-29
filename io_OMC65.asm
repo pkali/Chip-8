@@ -3,7 +3,7 @@
 ;
 ;LOAD#D9:xxxxxx.xxx
 ;
-	.LOCAL 
+;	.LOCAL 
 ;
 ;This file contains ONLY
 ;I/O macros.
@@ -14,85 +14,17 @@
 ;Last update 03.12.91	
 ;            12.11.94	
 ;
-ICCOM	= $0342
-ICBAL	= $0344
-ICBAH	= $0345
-ICBLL	= $0348
-ICBLH	= $0349
-ICAX1	= $034A
-ICAX2	= $034B
-ICAX3	= $034C
-ICAX4	= $034D
-ICAX5	= $034E
-;
-DSTATS	= $0303
-DBUFLO	= $0304
-DBUFHI	= $0305
-DBYTLO	= $0308
-DBYTHI	= $0309
-;
-CIOV	= $E456
-SIOV	= $E453
-ROWCRS	= 84
-COLCRS	= 85
-COLOR0	= $02C4
-COLOR1	= $02C5
-COLOR2	= $02C6
-COLOR3	= $02C7
-ATACHR	= 763
-DE	= $D0
-DF	= $D1
-;
-AFP	= $D800
-FASC	= $D8E6
-IFP	= $D9AA
-FPI	= $D9D2
-ZFR0	= $DA44
-ZFR1	= $DA46
-FMOVE	= $DDB6
-FMUL	= $DADB
-FR0	= $D4
-FR1	= $E0
-FDIV	= $DB28
-;
-CDTMV1	= $0218
-CDTMV2	= $021A
-CDTMV3	= $021C
-CDTMV4	= $021E
-CDTMV5	= $0220
-VVBLKI	= $0222
-VVBLKD	= $0224
-CDTMA1	= $0226
-CDTMA2	= $0228
-CDTMF3	= $022A
-CDTMF4	= $022C
-CDTMF5	= $022E
-SDMCTL	= $022F
-SDLSTL	= $0230
-;
-MEMLO	= $02E7
-;
-;DMACTL	= $D400
-;CONSOL = $D01F
-;KBCODE	= $D209
-;RANDOM	= $D20A
-;IRQEN	= $D20E
-;PORTB	= $D301
-;NMIEN	= $D40E
-;
-;SETVBV	= $E45C
-;XITVBV	= $E462
-;
+
 VCLOSE	JMP MCLOSE
 VOPEN	JMP MOPEN
 VGET	JMP MGET
 VPUT	JMP MPUT
 ENDVECS
-	.OPT NO LIST
+	;.OPT NO LIST
 ;   .OPT LIST
 ;BUFF .= *
 ;   *=  *+1024
-	.OPT NO LIST
+	;.OPT NO LIST
 MCLOSE
 	LDA #12
 	STA ICCOM,X
@@ -125,31 +57,31 @@ MGET
 ;Now come the actual macros.	
 ;
 	.MACRO CLOSE 
-	LDX #[%1*16]
+	LDX #[%%1*16]
 	JSR VCLOSE
 ;   BPL *+5
 ;   JSR ERROR
 	.ENDM 
 ;
 	.MACRO OPEN 
-	LDX #[%1*16]
-	.IF [%4<256] .AND [%4>0]
+	LDX #[%%1*16]
+	.IF %%4<256 .AND %%4>0
 	JMP @O
-@O1	.= *
-	.BYTE %$4,$9B
+@O1	
+	.BYTE %%$4,$9B
 @O
 	LDA # <@O1
 	STA ICBAL,X
 	LDA # >@O1
 	STA ICBAH,X
 	.ELSE 
-	LDA # <%4
+	LDA # <%%4
 	STA ICBAL,X
-	LDA # >%4
+	LDA # >%%4
 	STA ICBAH,X
 	.ENDIF 
-	LDA #%2
-	LDY #%3
+	LDA #%%2
+	LDY #%%3
 	JSR VOPEN
 ;   BPL *+5
 ;   JSR ERROR
@@ -160,13 +92,13 @@ MGET
 ;open but with address and not name
 
 	.MACRO OPENA
-	LDX #[%1*16]
-	LDA # <%4
+	LDX #[%%1*16]
+	LDA # <%%4
 	STA ICBAL,X
-	LDA # >%4
+	LDA # >%%4
 	STA ICBAH,X
-	LDA #%2
-	LDY #%3
+	LDA #%%2
+	LDY #%%3
 	JSR VOPEN
 ;   BPL *+5
 ;   JSR ERROR
@@ -183,7 +115,7 @@ MGET
 ;
 	.MACRO PUT 
 ;PUT 0 ;PUTS A OUT CHANNEL	
-	LDX #[%1*16]
+	LDX #[%%1*16]
 	JSR VPUT
 ;   BPL *+5
 ;   JSR ERROR
@@ -191,7 +123,7 @@ MGET
 ;
 	.MACRO GET 
 ;RETURNS ONE BYTE IN A	
-	LDX #[%1*16]
+	LDX #[%%1*16]
 	JSR VGET
 ;   BPL *+5
 ;   JSR ERROR
@@ -201,14 +133,14 @@ MGET
 ;
 ;
 	.MACRO BGET 
-	LDX #[%1*16]
-	LDA # <%2
+	LDX #[%%1*16]
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #7
 	STA ICCOM,X
@@ -219,14 +151,14 @@ MGET
 	.ENDM 
 ;
 	.MACRO BPUT 
-	LDX #[%1*16]
-	LDA # <%2
+	LDX #[%%1*16]
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #11
 	STA ICCOM,X
@@ -237,14 +169,14 @@ MGET
 ;
 	.MACRO INPUT 
 ;INPUT CH,BUFF,LEN	
-	LDX #[%1*16]
-	LDA # <%2
+	LDX #[%%1*16]
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #5
 	STA ICCOM,X
@@ -257,28 +189,28 @@ MGET
 ;PRINT 0,"HELLO", OR	
 ;PRINT 0,BUFFER, OR	
 ;PRINT 0,BUFFER,LEN	
-	.IF %0>1
-	LDX #[%1*16]
+	.IF %%0>1
+	LDX #[%%1*16]
 	.ELSE 
 	LDX #$00
 	.ENDIF 
-	.IF [%2<256] .AND [%2>0]
+	.IF [%%2<256] .AND [%%2>0]
 	JMP @2PR
-@1	.= *
-	.BYTE %$2,$9B
+@1
+	.BYTE %%2,$9B
 @2PR
-	.IF %0=3
-	  BPUT %1,@1,%3
+	.IF %%0=3
+	  BPUT %%1,@1,%%3
 	.ELSE 
-	  BPUT %1,@1,[@2PR-@1]
+	  BPUT %%1,@1,[@2PR-@1]
 	.ENDIF 
 	.ELSE 
-	.IF %0=3
-	  BPUT %1,%2,%3
+	.IF %%0=3
+	  BPUT %%1,%%2,%%3
 	.ELSE 
-	LDA # <%2
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
 	LDA #128
 	STA ICBLL,X
@@ -295,38 +227,38 @@ MGET
 ;
 	.MACRO XIO 
 ;XIO 38,2,0,0,"R:"	
-	LDX #%2*16
-	.IF [%1>0] .AND [%1<256]
-	LDA #%1
+	LDX #%%2*16
+	.IF [%%1>0] .AND [%%1<256]
+	LDA #%%1
 	.ELSE 
-	LDA %1
+	LDA %%1
 	.ENDIF 
 	STA ICCOM,X
-	.IF [%3>0] .AND [%3<256]
-	LDA #%3
+	.IF [%%3>0] .AND [%%3<256]
+	LDA #%%3
 	.ELSE 
-	LDA %3
+	LDA %%3
 	.ENDIF 
 	STA ICAX1,X
-	.IF [%4>0] .AND [%4<256]
-	LDA #%4
+	.IF [%%4>0] .AND [%%4<256]
+	LDA #%%4
 	.ELSE 
-	LDA %4
+	LDA %%4
 	.ENDIF 
 	STA ICAX2,X
-	.IF [%5<256] .AND [%5>0]
+	.IF [%%5<256] .AND [%%5>0]
 	JMP @2BP
 @1	.= *
-	.BYTE %$5,$9B
+	.BYTE %%$5,$9B
 @2BP	.= *
 	LDA # <@1
 	STA ICBAL,X
 	LDA # >@1
 	STA ICBAH,X
 	.ELSE 
-	LDA # <%5
+	LDA # <%%5
 	STA ICBAL,X
-	LDA # >%5
+	LDA # >%%5
 	STA ICBAH,X
 	.ENDIF 
 	JSR CIOV
@@ -337,7 +269,7 @@ MGET
 ;
 	.MACRO DSTATUS 
 ;DSTATUS 1	
-	LDX #%1*16
+	LDX #%%1*16
 	LDA #$0D
 	STA ICCOM,X
 	JSR CIOV
@@ -347,26 +279,26 @@ MGET
 ;
 	.MACRO RND 
 ;RND 0-255	
-L1	.= *
+L1	
 	LDA $D20A
-	.IF %1<256
-	CMP #%1
+	.IF %%1<256
+	CMP #%%1
 	.ELSE 
-	CMP %1
+	CMP %%1
 	.ENDIF 
 	BCS L1
 	.ENDM 
 ;
 	.MACRO BPUTV 
 ;USE WHEN LEN IS A .WORD VALUE	
-	LDX #[%1*16]
-	LDA # <%2
+	LDX #[%%1*16]
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
-	LDA %3
+	LDA %%3
 	STA ICBLL,X
-	LDA %3+1
+	LDA %%3+1
 	STA ICBLH,X
 	LDA #11
 	STA ICCOM,X
@@ -375,7 +307,7 @@ L1	.= *
 ;
 	.MACRO PAK 
 	  PRINT 0,"Press a key.",12
-L1	.= *
+L1	
 	LDA 764
 	CMP #$FF
 	BEQ L1
@@ -383,16 +315,16 @@ L1	.= *
 	STA 764
 	.ENDM 
 ;
-	.MACRO BGET.V 
+	.MACRO BGET_V 
 ;FOR USE WHEN BUFADR=WORD	
-	LDX #[%1*16]
-	LDA %2
+	LDX #[%%1*16]
+	LDA %%2
 	STA ICBAL,X
-	LDA %2+1
+	LDA %%2+1
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #7
 	STA ICCOM,X
@@ -402,14 +334,14 @@ L1	.= *
 ;
 	.MACRO BGETV 
 ;FOR USE WHEN BUFLEN=WORD	
-	LDX #[%1*16]
-	LDA # <%2
+	LDX #[%%1*16]
+	LDA # <%%2
 	STA ICBAL,X
-	LDA # >%2
+	LDA # >%%2
 	STA ICBAH,X
-	LDA %3
+	LDA %%3
 	STA ICBLL,X
-	LDA %3+1
+	LDA %%3+1
 	STA ICBLH,X
 	LDA #7
 	STA ICCOM,X
@@ -417,32 +349,32 @@ L1	.= *
 	TYA 
 	.ENDM 
 ;
-	.MACRO BPUT.V 
+	.MACRO BPUT_V 
 ;USE WHEN BUF IS A .WORD VALUE	
-	LDX #[%1*16]
-	LDA %2
+	LDX #[%%1*16]
+	LDA %%2
 	STA ICBAL,X
-	LDA %2+1
+	LDA %%2+1
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #11
 	STA ICCOM,X
 	JSR CIOV
 	.ENDM 
 ;
-	.MACRO INPUT.V 
+	.MACRO INPUT_V 
 ;INPUT CH,POINTER,LEN	
-	LDX #[%1*16]
-	LDA %2
+	LDX #[%%1*16]
+	LDA %%2
 	STA ICBAL,X
-	LDA %2+1
+	LDA %%2+1
 	STA ICBAH,X
-	LDA # <%3
+	LDA # <%%3
 	STA ICBLL,X
-	LDA # >%3
+	LDA # >%%3
 	STA ICBLH,X
 	LDA #5
 	STA ICCOM,X

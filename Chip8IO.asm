@@ -1,25 +1,30 @@
+;   @com.wudsn.ide.asm.mainsourcefile=chip8.asm
    .IF *>0
 
-getDir
-   close 1
-   OPEN 1,6,0,"D:*.CH8"
+dir_mask dta c"D:*.CH8"
+k_colon dta c"K:"
+CFG_filename dta c"D:CHIP8.CFG"
 
-   mwa #nameBuffer,temp_out
-   mva #0,fileCounter
+getDir
+   close #1
+   OPEN #1 #6 #dir_mask
+
+   mwa #nameBuffer temp_out
+   mva #0 fileCounter
 
    ;get line
 getLine
     ;in Happy DOS there are 2 chars in front of the file name
-    get 1
+    get #1
     bmi lineError ; I do not expect it here, but just in case...
-    get 1
+    get #1
     bmi lineError ; I do not expect it here, but just in case...
     cmp #32  ;for normal file name here comes space, for the last one it is not space
              ;"0517 Free Sectors" begin - the last line of DIR
     bne dirEnd
-    mva #8,temp_in
+    mva #8 temp_in
 getFileNameLoop
-    get 1
+    get #1
     bmi lineError ; I do not expect it here, but just in case...
     ldy #0
     sta (temp_out),y
@@ -29,7 +34,7 @@ getFileNameLoop
     ;get the remaining bytes here
     
 getRemains
-    get 1
+    get #1
     bmi lineError ; I do not expect it here, but just in case...
     cmp #155 ;[endline]
     bne getRemains
@@ -39,14 +44,14 @@ lineError
     cmp #64 ; too many files... sorry, no bonus
     bne getLine
 dirEnd
-    close 1
+    close #1
     rts
 
 ;-----------------------------------------------
 fileSelector
 ;-----------------------------------------------
    ;---display downloaded directory of .CH8 files
-   mwa #nameBuffer,temp_in
+   mwa #nameBuffer temp_in
    
    ldx #0
 
@@ -77,14 +82,14 @@ displayFileLoop
    ;---------------------------------
    ;select the file
 
-   close 1         ;[lame]
-   open 1,4,0,"K:" ;what the heck??? after 16 years of coding on Atari
+   close #1         ;[lame]
+   open #1 #4 #K_colon ;what the heck??? after 16 years of coding on Atari
                    ;am I going to use system to read a key for the very first time???
                    ;Am I getting old???
 readKeyLoop
     jsr inverseCursor               
 
-    get 1
+    get #1
     pha
     jsr inverseCursor
     pla
@@ -123,7 +128,7 @@ keyDown
    inx
    cpx fileCounter
    bne doNotDown
-   dex selectedFile
+   dex ;selectedFile
 doNotDown
    stx selectedFile
    jmp readKeyLoop
@@ -148,10 +153,10 @@ doNotRight
 keyEsc   
    
 keyReturn
-   close 1
+   close #1
    
    ;----copy selected name
-   mwa #selectedNameBuffer,temp_out
+   mwa #selectedNameBuffer temp_out
    jsr selFileAddr
   
    ldy #7
@@ -159,7 +164,7 @@ nameCopyLoop
    lda (temp_in),y
    cmp #$20 ;space to be replaced with question mark
    bne notSpace
-   lda #'? ;'
+   lda #'?'
 notSpace   
    sta (temp_out),y
    dey
@@ -218,7 +223,7 @@ loadGame
     ;game name + D: is in selectedName
     ;-----
     ;clear Chip8Code memory
-    mwa #Chip8Code,temp_out
+    mwa #Chip8Code temp_out
     
     ldy #0
 memClearLoop
@@ -229,19 +234,19 @@ memClearLoop
     bne memClearLoop
     
 
-    mwa #Chip8Code,temp_out
+    mwa #Chip8Code temp_out
     
-    close 1 ;[lame]
-    opena 1,4,0,selectedName
+    close #1 ;[lame]
+    open #1 #4 #selectedName
 readFileLoop
-    get 1
+    get #1
     bmi endOfFile
     ldy #0
     sta (temp_out),y
     inw temp_out
     jmp readFileLoop
 endOfFile
-    close 1
+    close #1
     
     rts
 ;---------------------------------
@@ -252,67 +257,65 @@ getConfig
 ;selectedName should be already done, 
 ;so run it after FileSelector and before emulation starts
 
-   close 1 ;[lame] because I should know if #1 is closed or not
+   close #1 ;[lame] because I should know if #1 is closed or not
            ; but it is a no-brainer
-   open 1,4,0,"D:CHIP8.CFG"
+   open #1 #4 #CFG_filename ; "D:CHIP8.CFG"
    
 getConfigLoop
     jsr selFileAddr
-    mva #0,temp_out   ;char counter 
+    mva #0 temp_out   ;char counter 
 
 getConfigLoopInner
-    get 1
+    get #1
     jmi getConfigError
     cmp #'/' ;  / = comment
-    beq finishLine
+    jeq finishLine
     ldy #0
     cmp (temp_in),y
-    bne finishLine
+    jne finishLine
     ;1st char found!
     inw temp_in
     inc:lda temp_out
     cmp #8
     bne getConfigLoopInner
     ; name found!!!!
-    get 1 ; one space after file name
-    get 1
+    get #1 ; one space after file name
+    get #1
     jsr asciiFind 
     stx joystickConversion
-    get 1 ; one space 
-    get 1
+    get #1 ; one space 
+    get #1
     jsr asciiFind 
     stx joystickConversion+1
-    get 1 ; one space 
-    get 1
+    get #1 ; one space 
+    get #1
     jsr asciiFind 
     stx joystickConversion+2
-    get 1 ; one space 
-    get 1
+    get #1 ; one space 
+    get #1
     jsr asciiFind 
     stx joystickConversion+3
-    get 1 ; one space 
-    get 1
+    get #1 ; one space 
+    get #1
     jsr asciiFind 
     stx joystickConversion+4
-    get 1 ; one space 
-    get 1
+    get #1 ; one space 
+    get #1
     jsr asciiFind
     lda toUpperNibble,X  ;A=X*16
     sta delay
-    close 1
-    ;close 2
+    close #1
     rts
 
 finishLine
-    get 1
+    get #1
     bmi getConfigError
     cmp #155 ;[endline]
     bne finishLine
     jmp getConfigLoop
     
 getConfigError
-    close 1
-    ;close 2
+    close #1
     rts
 ;----------------
 asciiFind    
@@ -341,12 +344,12 @@ dl_fileSelector
     .word dl_fileSelector
 
 fileSelectorHeader
-   ;.sbyte "                                " ;32 bytes
-    .sbyte " Chip 8 & SuperChip 8 emulator  "
-    .sbyte "by pirx@5oft.com 2006-01-17 v1.1"
-    .sbyte "   select game with cursors     "
+   ;dta d"                                " ;32 bytes
+    dta d" Chip 8 & SuperChip 8 emulator  "
+    dta d"by pirx@5oft.com 2006-01-17 v1.1"
+    dta d"   select game with cursors     "
 fileSelectorScreen
-    :22 .sbyte "                                " ;32 bytes
+    :22 dta d"                                " ;32 bytes
 fileSelectorScreenEnd
 
 selectedFile
@@ -396,4 +399,3 @@ fileOffsetH
     
     
   .ENDIF
-    
