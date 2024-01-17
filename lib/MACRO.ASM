@@ -61,26 +61,30 @@
 ;    vdl dl,$03 - wide screen   (48 bytes)                                                                           
 ;       (works only with system interrupts ON)                                                                       
                                                                                                                      
-         .if %0=2                                                                                                    
+         .if :0=2                                                                                                    
            lda dmactls                                                                                               
            and #$fc                                                                                                  
-           ora #%2                                                                                                   
+           ora #:2                                                                                                   
            sta dmactls                                                                                               
          .endif                                                                                                      
                                                                                                                      
-         LDA # <%1                                                                                                   
+         LDA # <:1                                                                                                   
          STA DLPTRS                                                                                                  
-         LDA # >%1                                                                                                   
+         LDA # >:1                                                                                                   
          STA DLPTRS+1                                                                                                
          .ENDM                                                                                                       
 ;-------------------------------------                                                                               
-      .MACRO halt                                                                                                    
-?stop                                                                                                                
-      lda RANDOM                                                                                                     
-      and #$05                                                                                                       
-      sta COLBAK                                                                                                     
-      jmp ?stop                                                                                                      
-      .ENDM                                                                                                          
+    .macro HALT brightness
+?loop
+    lda RANDOM
+    .if :0=1
+        and #:1
+    .else
+        and #$03
+    .endif
+    sta COLBAK
+    jmp ?loop
+    .endm                                                                                              
 ;-------------------------------------                                                                               
          .MACRO KEY                                                                                                  
 ;   KEY                                                                                                              
