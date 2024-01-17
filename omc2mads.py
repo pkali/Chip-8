@@ -18,7 +18,7 @@ replacements = {
     r'move\.w (.*)\,(.*)': r'mwa \1 \2',
     r'sub\.q\s*(\w+)\s*\,\s*(\w+)': r'sbw \2 #\1',
     r'add\.q\s*(\w+)\s*\,\s*(\w+)': r'adw \2 #\1',
-    r'dcmp\.q\s*(\w+)\s*\,\s*(\w+)': r'cpw \2 #\1',
+    r'dcmp\.q\s*(\w+)\s*\,\s*(\w+)': r'cpw \2 #\1',  # THIS IS BAD FOR SOME REASON
     r'lsr [aA](\s)': r'lsr\1',
     r'asl [aA](\s)': r'asl\1',
     r'rol [aA](\s)': r'rol\1',
