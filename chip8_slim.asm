@@ -71,6 +71,42 @@
     
 ;==================================
     org  $3000
+dl_SuperChip8  
+    .byte $70,$70,$70
+    .byte $4b
+    .word screen
+    :63 dta $0b  ; 64 lines
+
+    .byte $70,$70
+    .byte $42
+    .word helpScreen
+    :4 .byte 0,2
+    
+    .byte $41
+    .word dl_SuperChip8
+;==================================
+dl_Chip8  
+    .byte $70,$70,$70+$80
+    .byte $49
+    .word screen
+    :31 .byte $09  ; 32 lines
+    
+    .byte $70,$70
+    .byte $42
+    .word helpScreen
+    :4 .byte 0,2
+
+    .byte $41
+    .word dl_Chip8
+;==================================
+textScreen
+    dta d"                                " ;32 bytes
+helpScreen
+    dta d"   Chip8 keys       Atari keys  " ;32 bytes
+    dta d"  [1][2][3][C]     [1][2][3][4] " ;32 bytes
+    dta d"  [4][5][6][D] --> [Q][W][E][R] " ;32 bytes
+    dta d"  [7][8][9][E]     [A][S][D][F] " ;32 bytes
+    dta d"  [A][0][B][F]     [Z][X][C][V] " ;32 bytes
 start
     mva #0 COLOR2 ;nice black background
 lateStart
@@ -712,36 +748,10 @@ Chip8_DXXX
     tax
 doRorC8
     jeq doNotRorC8
-    lsr spriteBuffer+2*1-2
-    ror spriteBuffer+2*1-1
-    lsr spriteBuffer+2*2-2
-    ror spriteBuffer+2*2-1
-    lsr spriteBuffer+2*3-2
-    ror spriteBuffer+2*3-1
-    lsr spriteBuffer+2*4-2
-    ror spriteBuffer+2*4-1
-    lsr spriteBuffer+2*5-2
-    ror spriteBuffer+2*5-1
-    lsr spriteBuffer+2*6-2
-    ror spriteBuffer+2*6-1
-    lsr spriteBuffer+2*7-2
-    ror spriteBuffer+2*7-1
-    lsr spriteBuffer+2*8-2
-    ror spriteBuffer+2*8-1
-    lsr spriteBuffer+2*9-2
-    ror spriteBuffer+2*9-1
-    lsr spriteBuffer+2*10-2
-    ror spriteBuffer+2*10-1
-    lsr spriteBuffer+2*11-2
-    ror spriteBuffer+2*11-1
-    lsr spriteBuffer+2*12-2
-    ror spriteBuffer+2*12-1
-    lsr spriteBuffer+2*13-2
-    ror spriteBuffer+2*13-1
-    lsr spriteBuffer+2*14-2
-    ror spriteBuffer+2*14-1
-    lsr spriteBuffer+2*15-2
-    ror spriteBuffer+2*15-1
+    .rept 16, #
+      lsr spriteBuffer+2*(#+1)-2
+      ror spriteBuffer+2*(#+1)-1
+    .endr
     dex
     jmp doRorC8
 doNotRorC8
@@ -855,54 +865,11 @@ superSpriteLoop
     tax
 doRor
     jeq doNotRor
-    lsr spriteBuffer+3*1-3
-    ror spriteBuffer+3*1-2
-    ror spriteBuffer+3*1-1
-    lsr spriteBuffer+3*2-3
-    ror spriteBuffer+3*2-2
-    ror spriteBuffer+3*2-1
-    lsr spriteBuffer+3*3-3
-    ror spriteBuffer+3*3-2
-    ror spriteBuffer+3*3-1
-    lsr spriteBuffer+3*4-3
-    ror spriteBuffer+3*4-2
-    ror spriteBuffer+3*4-1
-    lsr spriteBuffer+3*5-3
-    ror spriteBuffer+3*5-2
-    ror spriteBuffer+3*5-1
-    lsr spriteBuffer+3*6-3
-    ror spriteBuffer+3*6-2
-    ror spriteBuffer+3*6-1
-    lsr spriteBuffer+3*7-3
-    ror spriteBuffer+3*7-2
-    ror spriteBuffer+3*7-1
-    lsr spriteBuffer+3*8-3
-    ror spriteBuffer+3*8-2
-    ror spriteBuffer+3*8-1
-    lsr spriteBuffer+3*9-3
-    ror spriteBuffer+3*9-2
-    ror spriteBuffer+3*9-1
-    lsr spriteBuffer+3*10-3
-    ror spriteBuffer+3*10-2
-    ror spriteBuffer+3*10-1
-    lsr spriteBuffer+3*11-3
-    ror spriteBuffer+3*11-2
-    ror spriteBuffer+3*11-1
-    lsr spriteBuffer+3*12-3
-    ror spriteBuffer+3*12-2
-    ror spriteBuffer+3*12-1
-    lsr spriteBuffer+3*13-3
-    ror spriteBuffer+3*13-2
-    ror spriteBuffer+3*13-1
-    lsr spriteBuffer+3*14-3
-    ror spriteBuffer+3*14-2
-    ror spriteBuffer+3*14-1
-    lsr spriteBuffer+3*15-3
-    ror spriteBuffer+3*15-2
-    ror spriteBuffer+3*15-1
-    lsr spriteBuffer+3*16-3
-    ror spriteBuffer+3*16-2
-    ror spriteBuffer+3*16-1
+    .rept 16, #
+      lsr spriteBuffer+3*(#+1)-3
+      ror spriteBuffer+3*(#+1)-2
+      ror spriteBuffer+3*(#+1)-1
+    .endr
     dex
     jmp doRor
 doNotRor
@@ -1886,41 +1853,5 @@ SChip8Font ;Super Chip 8 font set:
 ;==================================
     
      org $8000
-dl_SuperChip8  
-    .byte $70,$70,$70
-    .byte $4b
-    .word screen
-    :63 dta $0b  ; 64 lines
-
-    .byte $70,$70
-    .byte $42
-    .word helpScreen
-    :4 .byte 0,2
-    
-    .byte $41
-    .word dl_SuperChip8
-;==================================
-dl_Chip8  
-    .byte $70,$70,$70+$80
-    .byte $49
-    .word screen
-    :31 .byte $09  ; 32 lines
-    
-    .byte $70,$70
-    .byte $42
-    .word helpScreen
-    :4 .byte 0,2
-
-    .byte $41
-    .word dl_Chip8
-;==================================
-textScreen
-    dta d"                                " ;32 bytes
-helpScreen
-    dta d"   Chip8 keys       Atari keys  " ;32 bytes
-    dta d"  [1][2][3][C]     [1][2][3][4] " ;32 bytes
-    dta d"  [4][5][6][D] --> [Q][W][E][R] " ;32 bytes
-    dta d"  [7][8][9][E]     [A][S][D][F] " ;32 bytes
-    dta d"  [A][0][B][F]     [Z][X][C][V] " ;32 bytes
 screen
     run start
