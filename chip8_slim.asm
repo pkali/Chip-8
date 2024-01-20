@@ -541,10 +541,7 @@ C8_8XX5
     ;load VY
     lda currentInstruction+1
     and #$F0
-    lsr
-    lsr
-    lsr
-    lsr
+    :4 lsr
     tax
     lda V0,X
     sta temp_in
@@ -580,10 +577,7 @@ C8_8XX7
     ;load VY
     lda currentInstruction+1
     and #$F0
-    lsr
-    lsr
-    lsr
-    lsr
+    :4 lsr
     tax
     lda V0,X
     tay
@@ -898,16 +892,13 @@ multiplyBy8
     lda temp_in ;there was XPOS value stored here
     :3 lsr
     clc
-    adc temp_out
-    sta temp_out
+    adc:sta temp_out
     scc:inc temp_out+1
     clc
     lda #<screen
-    adc temp_out
-    sta temp_out
+    adc:sta temp_out
     lda #>screen
-    adc temp_out+1
-    sta temp_out+1
+    adc:sta temp_out+1
     ;now in temp_out there is address
     ;of the first destination byte on screen for the sprite
     ;move sprite from buffer to screen (3 bytes wide)
@@ -1030,10 +1021,8 @@ fr1E
     tax
     lda V0,X
     clc
-    adc I+1
-    sta I+1
-    bcc skip07
-    inc I
+    adc:sta I+1
+    scc:inc I
 skip07
     rts
 ;------------------
@@ -1463,7 +1452,7 @@ rightnumber
 ;-------decimal constans
 digits        .byte 0,1,2,3,4,5,6,7,8,9
 nineplus     .byte 9+1
-;wariables
+;variables
 decimal   .word 0
 decimalresult
           .byte 0,0,0,0
@@ -1536,14 +1525,14 @@ keyboardGrid
     ;keys 0,1,2,3,4,...,F
     ;0 = key not pressed
     ;1 = key pressed
-        :16 .byte 0
-        .byte 0,0 ;to allow easier initialisation
+    :16 .byte 0
+    .byte 0,0 ;to allow easier initialisation
 joystickConversion
     .byte 2,8,4,6,5 ;default
     ;.byte 1,2,3,$C,$A
     ; up down left right trigger
     ; these bytes are set by readConfig
-    ; the above are default settings that work for few games
+    ; the above are default settings that work for a few games, e.g. BREAKOUT
 delay
     ;the higher the value the emulation is slower (in CHIP8 mode)
     .byte $80
