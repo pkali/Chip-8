@@ -70,7 +70,7 @@
     .zpvar collisionByte .byte
     
 ;==================================
-    org  $3000
+    org  $2000
 dl_SuperChip8  
     .byte $70,$70,$70
     .byte $4b
