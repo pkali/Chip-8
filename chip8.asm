@@ -110,75 +110,88 @@ helpScreen
 
 crunch jmp $FFFF ; will be changed by INIT routine
 
-err_msg_open .byte 'OPEN Error',$9b
-err_msg_bget .byte 'BGET Error',$9b
+err_msg_open  .byte 'OPEN Error',$9b
+err_msg_bget  .byte 'BGET Error',$9b
 err_msg_close .byte 'CLOSE Error',$9b
-fname .byte 'D8:CHIP8GAM>ALIEN.CH8',$9b
+err_no_cmd    .byte 'Wrong DOS...',$9b
+;fname .byte 'D8:CHIP8GAM>ALIEN.CH8',$9b
 
 ; I/O equtes
-comtab = 10
 zcrname = 3
 comfnam = 33
 write = $09
 
 
 start
-    ;read command line
-    ldy #zcrname+2  ; patches our crunch routine to be the same as the COMTAB one.
-    ldx #2
-loop1 lda (comtab),y
-    sta crunch,x
-    dey
-    dex
-    bpl loop1
+     lda BOOTQ       ; is DOS loaded at all?
+     lsr
+     jcc _no_command_line
+
+     lda DOSVEC+1    ; if so, does it point to RAM and not ROM?
+     cmp #$c0
+     jcs _no_command_line
+
+     ldy #$03
+     lda (DOSVEC),y
+     cmp #$4c
+     jne _no_command_line
+;prepare command line read
+     lda DOSVEC
+     clc
+     adc #$03
+     sta crunch+1
+     lda DOSVEC+1
+     adc #$00
+     sta crunch+2
 command_line
     jsr crunch       ; get next command line entry.
     beq exit         ; quit if there are no more.
 ; Set up for CIO print of data at COMFNAM
-    ldx #0           ; IOCB #0 (E:)
+    ldx #0*$10       ; IOCB #0 (E:)
+    lda #write       ; 'print string' command
+    sta ICCOM,x
     lda #63          ; set buffer length for max
-    sta icbll,x
+    sta ICBLL,x
     lda #0
-    sta icblh,x
-    lda comtab       ; store COMTAB+33 at icba
+    sta ICBLH,x
+    lda DOSVEC       ; store DOSVEC+33 at icba
     clc
     adc #comfnam
-    sta icbal,x
-    lda comtab+1
+    sta ICBAL,x
+    lda DOSVEC+1
     adc #0
-    sta icbah,x
-    lda #write       ; 'print string' command
-    sta iccom,x
-    jsr ciov         ; print it.
+    sta ICBAH,x
+    jsr CIOV         ; print it.
 exit
+    ldx #$10
+    jsr close_X
 open_file
     ldx #$10         ; IOCB #1
-    lda #$03         ; command: OPEN
+    lda #_OPEN       ; command: OPEN
     sta ICCOM,x
-    
-    lda comtab       ; store COMTAB+33 at icba
+    lda DOSVEC       ; store DOSVEC+33 at icba
     clc
     adc #comfnam
-    sta icbal,x
-    lda comtab+1
+    sta ICBAL,x
+    lda DOSVEC+1
     adc #0
-    sta icbah,x
+    sta ICBAH,x
     ;lda #<fname     ; filename address
     ;sta ICBAL,x
     ;lda #>fname
     ;sta ICBAL+1,x
-    lda #$04         ; $04 read, $08 save, $09 append, $0c R/W
-    sta icax1,x
+    lda #OPNIN       ; $04 read, $08 save, $09 append, $0c R/W
+    sta ICAX1,x
     lda #$00         ; additional parameter, $00 is always OK
-    sta icax2,x 
-    jsr ciov
+    sta ICAX2,x 
+    jsr CIOV
     bmi err_open
 
 buffer = chip8Code
 buflen = $1000
 read_binary
-    ldx #$10         ; IOCB #1
-    lda #$07         ; GET BYTES / BINARY READ
+    ldx #$10       ; IOCB #1
+    lda #GETCHR      ; GET BYTES / BINARY READ
     sta ICCOM,x
     lda #<buffer     ; memory address where data is supposed to go
     sta ICBAL,x
@@ -188,48 +201,60 @@ read_binary
     sta ICBLL,x
     lda #>buflen
     sta ICBLL+1,x
-    jsr ciov
-    cpy #$88         ; 136 End of file, it is OK.
+    jsr CIOV
+    cpy #EOFERR      ; 136 End of file, it is OK.
     seq:bmi err_bget
-       
-close_file
-    ldx #$10         ; IOCB #1
-    lda #$0c         ; CLOSE
-    sta ICCOM,x
-    jsr ciov
-    bmi err_close
+    ldx #$10
+    jsr close_X
     jmp emulate
-    
+
+close_X
+; IOCB*$10 to close in X
+    ;ldx #$10       ; IOCB #1
+    lda #_CLOSE      ; CLOSE
+    sta ICCOM,x
+    jsr CIOV
+    bmi err_close
+    rts
+
+_no_command_line
+    ldx #0 ;IOCB #0 (E:)
+    lda #<err_no_cmd
+    sta ICBAL,x
+    lda #>err_no_cmd
+    sta ICBAH,x
+    jmp err_prnt
 err_open
     ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_open
-    sta icbal,x
+    sta ICBAL,x
     lda #>err_msg_open
-    sta icbah,x
+    sta ICBAH,x
     jmp err_prnt
 err_bget
     ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_bget
-    sta icbal,x
+    sta ICBAL,x
     lda #>err_msg_bget
-    sta icbah,x
+    sta ICBAH,x
     jmp err_prnt
 err_close
     ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_close
-    sta icbal,x
+    sta ICBAL,x
     lda #>err_msg_close
-    sta icbah,x
-    jmp err_prnt
+    sta ICBAH,x
+    ;jmp err_prnt
 
 err_prnt
+    sty $ff
     lda #63 ; set buffer length for max
-    sta icbll,x
+    sta ICBLL,x
     lda #0
-    sta icblh,x
+    sta ICBLH,x
     lda #write ; 'print string' command
-    sta iccom,x
-    jsr ciov ; print it.
+    sta ICCOM,x
+    jsr CIOV ; print it.
     rts
     
 
