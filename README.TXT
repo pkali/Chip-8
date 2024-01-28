@@ -1,0 +1,1 @@
+›Chip8 and SuperChip8 interpreter v2.0›2024-01-27 by pirx github.com/pkali››To run game type:›CHIP8 game_path [config_path]››example:›CHIP8 GAMES>ALIEN.CH8›
