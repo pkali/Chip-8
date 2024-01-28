@@ -1,11 +1,19 @@
 ;**************************************
 ;* Chip 8 & Super Chip 8 interpreter  *
-;*        for Atari XL/XE             *
-;*        version 1.1                 *
+;*        for Atari 8-bit             *
+;*        version:                    *
+.macro ver
+    .byte '2.0'
+.endm     
 ;* author: Pawel "pirx" Kalinowski    *
-;* e-mail: pirx@5oft.com              *
-;* 2005-12-27 --> 2006-01-14          *
+;* 2005-12-27 --> 2024-01-27          *
 ;**************************************
+;2024-01-27
+; Code translated to mads,
+; command line interface for SpartaDos, BW-DOS, etc
+; usage: CHIP8 path_to_game path_to_config
+; [ESC] - quit to DOS
+; [Return] - game restart
 ;2006-01-17
 ; It should work on the real thing (DLI was on during IO)
 ; Joystick should not jam when used with keyboard
@@ -21,9 +29,9 @@
 ; Fixed directory listing under SpartaDos (X)
 ; Fixed inversed shooting - it shoots correctly when key is pressed.
 ; Reduced flickering a bit in Chip8 mode
-    ; icl 'syseq.s65'
-     icl 'lib/ATARISYS.ASM'
-     icl 'lib/MACRO.ASM'
+
+    icl 'lib/ATARISYS.ASM'
+    icl 'lib/MACRO.ASM'
 ;----------------------
     .macro inc_PC
         clc
@@ -35,41 +43,41 @@
 ;----------------------
 ;==================================
 ;virtual machine registers
-    .zpvar V0    .byte = $80
-    .zpvar V1    .byte
-    .zpvar V2    .byte
-    .zpvar V3    .byte
-    .zpvar V4    .byte
-    .zpvar V5    .byte
-    .zpvar V6    .byte
-    .zpvar V7    .byte
-    .zpvar V8    .byte
-    .zpvar V9    .byte
-    .zpvar VA    .byte
-    .zpvar VB    .byte
-    .zpvar VC    .byte
-    .zpvar VD    .byte
-    .zpvar VE    .byte
-    .zpvar VF    .byte ;carry and collision register
-    .zpvar I     .word ;Chip 8 type - big endian
-    .zpvar PC    .word ;Chip 8 type - big endian
-    .zpvar soundTimer .byte
-    .zpvar delayTimer .byte
+    .zpvar V0            .byte = $80
+    .zpvar V1            .byte
+    .zpvar V2            .byte
+    .zpvar V3            .byte
+    .zpvar V4            .byte
+    .zpvar V5            .byte
+    .zpvar V6            .byte
+    .zpvar V7            .byte
+    .zpvar V8            .byte
+    .zpvar V9            .byte
+    .zpvar VA            .byte
+    .zpvar VB            .byte
+    .zpvar VC            .byte
+    .zpvar VD            .byte
+    .zpvar VE            .byte
+    .zpvar VF            .byte ;carry and collision register
+    .zpvar I             .word ;Chip 8 type - big endian
+    .zpvar PC            .word ;Chip 8 type - big endian
+    .zpvar soundTimer    .byte
+    .zpvar delayTimer    .byte
     .zpvar superChipMode .byte
 ;==================================
 ;emulator registers - 6502 type - little endian
-    .zpvar fetchAddress .word
-    .zpvar stackPointer .word
+    .zpvar fetchAddress  .word
+    .zpvar stackPointer  .word
     .zpvar currentInstruction .word
-    .zpvar jumpPad .word
-    .zpvar screenWidth .byte  ;Chip 8 = 8 bytes, Super Chip 8 = 16 bytes
+    .zpvar jumpPad       .word
+    .zpvar screenWidth   .byte  ;Chip 8 = 8 bytes, Super Chip 8 = 16 bytes
 ;==================================
 ;other zero page variables
-    .zpvar temp_in .word ;for use only in most nested subroutines
-    .zpvar temp_out .word  ;for use only in most nested subroutines
+    .zpvar temp_in       .word ;for use only in most nested subroutines
+    .zpvar temp_out      .word  ;for use only in most nested subroutines
     .zpvar collisionByte .byte
     
-;==================================
+;===========================*=======
     org  $2000
 dl_SuperChip8  
     .byte $70,$70,$70
@@ -100,7 +108,7 @@ dl_Chip8
     .word dl_Chip8
 ;==================================
 textScreen
-    dta d"                                " ;32 bytes
+;    dta d"                                " ;32 bytes
 helpScreen
     dta d"   Chip8 keys       Atari keys  " ;32 bytes
     dta d"  [1][2][3][C]     [1][2][3][4] " ;32 bytes
@@ -110,47 +118,67 @@ helpScreen
 
 crunch jmp $FFFF ; will be changed by INIT routine
 
-err_msg_open  .byte 'OPEN Error',$9b
-err_msg_bget  .byte 'BGET Error',$9b
-err_msg_close .byte 'CLOSE Error',$9b
-err_no_cmd    .byte 'Wrong DOS...',$9b
-;fname .byte 'D8:CHIP8GAM>ALIEN.CH8',$9b
+err_msg_open  .byte 'OPEN Error', EOL
+err_msg_bget  .byte 'BGET Error', EOL
+err_msg_close .byte 'CLOSE Error', EOL
+err_no_cmd    .byte 'Wrong DOS, no command line.', EOL
+welcome_msg   .byte 'Chip8 interpreter v'
+              ver
+              .byte ' by pirx 2024', EOL
+usage_msg     .byte 'Use: CHIP8 pathToGame [pathToConfig]', EOL
+err_code      .byte 0
+fname_len     .byte 0
+bare_fname    :(8+1+3) .byte 0
+config_fname  .byte 'D:CHIP8.CFG', EOL
+save_COLOR2   .byte 0
+save_DLPTRS   .word 0
+save_VDSLST   .word 0
+save_DMACTLS  .byte 0
 
 ; I/O equtes
 zcrname = 3
 comfnam = 33
 write = $09
+max_buf_len = 63
 
 
 start
-     lda BOOTQ       ; is DOS loaded at all?
-     lsr
-     jcc _no_command_line
+    ;save current graphics settings
+    mva COLOR2 save_COLOR2
+    mwa DLPTRS save_DLPTRS
+    mwa VDSLST save_VDSLST
+    mva DMACTLS save_DMACTLS
 
-     lda DOSVEC+1    ; if so, does it point to RAM and not ROM?
-     cmp #$c0
-     jcs _no_command_line
+    jsr welcome
 
-     ldy #$03
-     lda (DOSVEC),y
-     cmp #$4c
-     jne _no_command_line
+    lda BOOTQ       ; is DOS loaded at all?
+    lsr
+    jcc err_no_command_line
+
+    lda DOSVEC+1    ; if so, does it point to RAM and not ROM?
+    cmp #$c0
+    jcs err_no_command_line
+
+    ldy #$03
+    lda (DOSVEC),y
+    cmp #$4c
+    jne err_no_command_line
 ;prepare command line read
-     lda DOSVEC
-     clc
-     adc #$03
-     sta crunch+1
-     lda DOSVEC+1
-     adc #$00
-     sta crunch+2
+    lda DOSVEC
+    clc
+    adc #$03
+    sta crunch+1
+    lda DOSVEC+1
+    adc #$00
+    sta crunch+2
 command_line
     jsr crunch       ; get next command line entry.
-    beq exit         ; quit if there are no more.
+    jeq usage        ; quit if there are no more.
 ; Set up for CIO print of data at COMFNAM
     ldx #0*$10       ; IOCB #0 (E:)
     lda #write       ; 'print string' command
     sta ICCOM,x
-    lda #63          ; set buffer length for max
+    lda #max_buf_len ; set buffer length for max
     sta ICBLL,x
     lda #0
     sta ICBLH,x
@@ -162,13 +190,10 @@ command_line
     adc #0
     sta ICBAH,x
     jsr CIOV         ; print it.
-exit
-    ldx #$10
-    jsr close_X
+
 open_file
+    jsr close_1      ; it seems that #1 is sometimes open on startup :O
     ldx #$10         ; IOCB #1
-    lda #_OPEN       ; command: OPEN
-    sta ICCOM,x
     lda DOSVEC       ; store DOSVEC+33 at icba
     clc
     adc #comfnam
@@ -176,16 +201,7 @@ open_file
     lda DOSVEC+1
     adc #0
     sta ICBAH,x
-    ;lda #<fname     ; filename address
-    ;sta ICBAL,x
-    ;lda #>fname
-    ;sta ICBAL+1,x
-    lda #OPNIN       ; $04 read, $08 save, $09 append, $0c R/W
-    sta ICAX1,x
-    lda #$00         ; additional parameter, $00 is always OK
-    sta ICAX2,x 
-    jsr CIOV
-    bmi err_open
+    jsr open_1
 
 buffer = chip8Code
 buflen = $1000
@@ -203,21 +219,166 @@ read_binary
     sta ICBLL+1,x
     jsr CIOV
     cpy #EOFERR      ; 136 End of file, it is OK.
-    seq:bmi err_bget
+    seq:jmi err_bget
+    
+    jsr get_bare_file_name
+    jsr crunch       ; get next command line entry.
+    jeq open_default_config
+    ldx #0           ; IOCB #0 (E:)
+    lda #write       ; 'print string' command
+    sta ICCOM,x
+    lda #max_buf_len ; set buffer length for max
+    sta ICBLL,x
+    lda #0
+    sta ICBLH,x
+    lda DOSVEC       ; store DOSVEC+33 at icba
+    clc
+    adc #comfnam
+    sta ICBAL,x
+    lda DOSVEC+1
+    adc #0
+    sta ICBAH,x
+    jsr CIOV         ; print it.
+
+    jsr close_1
+    ;open config
     ldx #$10
-    jsr close_X
+    lda DOSVEC       ; store DOSVEC+33 at icba
+    clc
+    adc #comfnam
+    sta ICBAL,x
+    lda DOSVEC+1
+    adc #0
+    sta ICBAH,x
+    jmp @+
+open_default_config
+    jsr close_1
+    ldx #$10
+    lda #<config_fname
+    sta ICBAL,x
+    lda #>config_fname
+    sta ICBAH,x
+@
+    jsr open_1
+    jsr get_config
+    
+    
+    
     jmp emulate
 
-close_X
-; IOCB*$10 to close in X
-    ;ldx #$10       ; IOCB #1
+;---------------------------------
+close_1
+; IOCB #1 only
+    ldx #$10         ; IOCB #1
     lda #_CLOSE      ; CLOSE
     sta ICCOM,x
     jsr CIOV
-    bmi err_close
+    jmi err_close
+    rts
+;---------------------------------
+open_1
+; IOCB #1 only
+; file to open must be already in ICBAL and ICBAH
+    ldx #$10         ; IOCB #1
+    lda #_OPEN       ; command: OPEN
+    sta ICCOM,x
+    ;lda #<fname     ; filename address
+    ;sta ICBAL,x
+    ;lda #>fname
+    ;sta ICBAL+1,x
+    lda #OPNIN       ; $04 read, $08 save, $09 append, $0c R/W
+    sta ICAX1,x
+    lda #$00         ; additional parameter, $00 is always OK
+    sta ICAX2,x 
+    jsr CIOV
+    jmi err_open
     rts
 
-_no_command_line
+get_1
+; IOCB #1 only
+; get byte from channel #1
+    ldx #$10
+    LDA #0
+    STA ICBLL,X
+    STA ICBLH,X
+    LDA #7
+    STA ICCOM,X
+    JMP CIOV
+
+skip_spaces_1
+; IOCB #1 only
+; returns first non-space byte from open file in channel #1
+    jsr get_1
+    cmp #' '
+    beq skip_spaces_1
+    rts
+
+.proc get_bare_file_name
+; gets file name from command line buffer
+    ; find end of the name
+    adw DOSVEC #comfnam temp_in
+    ldy #0
+@
+      lda (temp_in),y
+      cmp #EOL
+      beq eol_found
+      iny
+      cpy #max_buf_len
+    bne @-
+eol_found  ; with caviat that if it is longer than max_buf_len it will screw it up
+    ;in Y we have the EOL after file name
+    dey
+    ldx #0
+@
+      lda (temp_in),y
+      cmp #':'
+      beq name_start_found
+      cmp #'>'
+      beq name_start_found
+      cmp #'/'
+      beq name_start_found
+      cmp #'\'
+      beq name_start_found
+      inx
+      dey
+    bpl @-
+name_start_found
+    iny  ; move forward 1 char
+    tya
+    clc
+    adc temp_in
+    sta temp_in
+    scc:inc temp_in+1
+    ; in X - length of the filename
+    stx fname_len
+    ; in temp_in - beginning of the filename
+    ldy #0
+@
+      lda (temp_in),y
+      sta bare_fname,y
+      iny
+      cpy fname_len
+    bne @-
+    rts
+
+.endp    
+;---------------------------------
+;(error) messages
+welcome
+    ldx #0 ;IOCB #0 (E:)
+    lda #<welcome_msg
+    sta ICBAL,x
+    lda #>welcome_msg
+    sta ICBAH,x
+    jmp err_prnt
+usage
+    ldx #0 ;IOCB #0 (E:)
+    lda #<usage_msg
+    sta ICBAL,x
+    lda #>usage_msg
+    sta ICBAH,x
+    jmp err_prnt
+err_no_command_line
     ldx #0 ;IOCB #0 (E:)
     lda #<err_no_cmd
     sta ICBAL,x
@@ -247,8 +408,8 @@ err_close
     ;jmp err_prnt
 
 err_prnt
-    sty $ff
-    lda #63 ; set buffer length for max
+    sty err_code
+    lda #max_buf_len ; set buffer length for max
     sta ICBLL,x
     lda #0
     sta ICBLH,x
@@ -257,12 +418,98 @@ err_prnt
     jsr CIOV ; print it.
     rts
     
+;---------------------------------
+get_config
+;reads configuration file CHIP8.CFG
+;from current directory
+;and tries to assign joystick to Chip8 keyboard
+;game name address in temp_in
+;length of game name in fname_len
 
+   ; open 1,4,0,"D:CHIP8.CFG"
+get_configLoop
+    mwa #bare_fname temp_in
+    mva #0 temp_out   ;char counter 
+
+get_configLoopInner
+    jsr get_1
+    cmp #'/'         ;  / = comment
+    beq finishLine
+    ldy #0
+    cmp (temp_in),y
+    bne finishLine
+    ;1st char found!
+    inw temp_in
+    inc:lda temp_out
+    cmp fname_len
+    bne get_configLoopInner
+    ; name found!!!!
+    jsr skip_spaces_1
+    jsr asciiFind 
+    stx joystickConversion
+    jsr skip_spaces_1
+    jsr asciiFind 
+    stx joystickConversion+1
+    jsr skip_spaces_1
+    jsr asciiFind 
+    stx joystickConversion+2
+    jsr skip_spaces_1
+    jsr asciiFind 
+    stx joystickConversion+3
+    jsr skip_spaces_1
+    jsr asciiFind 
+    stx joystickConversion+4
+    jsr skip_spaces_1
+    jsr asciiFind
+    lda toUpperNibble,X  ;A=X*16
+    sta delay
+    jsr close_1
+    rts
+
+finishLine
+    jsr get_1
+    bmi get_config_error
+    cmp #EOL
+    bne finishLine
+    jmp get_configLoop
+    
+get_config_error
+    jsr close_1
+    rts
+;----------------
+asciiFind    
+    ldx #15
+asciiFindLoop
+    cmp asciiNumber,X
+    beq asciiFound
+    dex
+    bpl asciiFindLoop
+    ;in X I have binary number to be put into 
+asciiFound
+    rts
+asciiNumber
+    .byte '0123456789ABCDEF'
+;----------------
+    
+;==================================
+exit_to_dos
+;==================================
+    VMAIN XITVBV,7
+    mwa save_DLPTRS DLPTRS
+    mva save_DMACTLS DMACTLS
+    mwa save_VDSLST VDSLST
+    mva save_COLOR2 COLOR2
+    ;noSound
+    mvx #0 AUDF1
+    stx AUDC1
+    dex
+    sta CH1  ; clear keyboard
+    rts
+    
 ;==================================
 emulate
 ;==================================
     mva #0 COLOR2 ;nice black background
-lateStart
     ;hold till keys released
     ;I do not think it is necessary
 holdLoop
@@ -298,8 +545,10 @@ emulationLoop
     inc_PC
     jsr delayChip8  ;atari is too fast for Chip8
     lda escapeFlag
-    beq emulationLoop
-    jmp lateStart
+    seq:jmp exit_to_dos
+    lda restartFlag
+    seq:jmp emulate
+    jmp emulationLoop
 executeInstruction
     ;idea is that each type of instruction (NXXX)
     ;has got its own checking and executing block
@@ -1341,6 +1590,7 @@ fr33
 fr0a
     ;fr0a       key vr       wait for for keypress,put key in register vr
     lda escapeFlag
+    ora restartFlag
     bne doNotWaitForKey
     lda #0
     ldy #15
@@ -1412,6 +1662,7 @@ zeroRegisters
     dex
     bpl zeroRegisters
     sta escapeFlag
+    sta restartFlag
     mva #8 screenWidth
     ;mwa #$0002 PC ;all Chip 8 programs (I have) start at $0200
     lda #<($200-2)  ;-2 because it might be started from inside emulation loop
@@ -1449,14 +1700,13 @@ clearGrid
     bpl clearGrid
     lda SKSTAT
     cmp #$ff
-    bne somethingPressed
-    ;no keyboard key pressed so clear keyboardGrid
-    jmp keyFinished
+    beq keyFinished     ;no keyboard key pressed so clear keyboardGrid
 somethingPressed
     lda KBCODE
-    cmp #28 ;ESCAPE
-    bne notEscape
-    mva #1 escapeFlag
+    cmp #@kbcode._esc ;ESCAPE
+    sne:mva #1 escapeFlag
+    cmp #@kbcode._ret
+    sne:mva #1 restartFlag
 notEscape
     ldx #15
 checkKeyTableLoop
@@ -1536,7 +1786,7 @@ dliLoop
 ;==================================
 printHex
     ;prints 4 hexadecimal digits from valueHex
-    ;directly on screen location addressHex
+    ;to (temp_out)
     ldy #0
     lda valueHex+1
     :4 lsr
@@ -1603,8 +1853,7 @@ TooLittle000
 rightnumber
     rts
 ;-------decimal constans
-digits        .byte 0,1,2,3,4,5,6,7,8,9
-nineplus     .byte 9+1
+digits      .byte 0,1,2,3,4,5,6,7,8,9
 ;variables
 decimal   .word 0
 decimalresult
@@ -1644,9 +1893,9 @@ delayChip8
     ldx delay
     beq skipDelay
 delayLoop
-    nop
+      nop
       dex
-      bne delayLoop
+    bne delayLoop
 skipDelay
     rts
 ;------------------------------
@@ -1691,7 +1940,7 @@ delay
     .byte $80
 stackTop
     ;16 levels of stack
-     :16 .word 0
+    :16 .word 0
     ;aah, just to be safe
     :8 .word 0
 ;==================================
@@ -1705,11 +1954,13 @@ HP48Flags
 ;==================================
 escapeFlag ;1=quit to Title
     .byte 0
+restartFlag ; 1=restart game
+    .byte 0
 ;==================================
     ; the address space of Chip8 machine
 chip8Code
-    ; ins 'CHIP8-GAMES/BREAKOUT.CH8'
-    ; ins 'CHIP8-GAMES/ALIEN.CH8'
+    ; ins 'GAMES/BREAKOUT.CH8'
+    ; ins 'GAMES/ALIEN.CH8'
     .ds $1000
     ;four kilobytes of space for Chip8 programs
 ;==================================
@@ -1843,7 +2094,7 @@ SChip8Font ;Super Chip 8 font set:
   .byte %11110000
   .byte %00010000
   .byte %00010000
-  .byte %11110000
+  .byte %01110000
   .byte %11100000
   .byte %10000000
   .byte %10000000
@@ -1866,7 +2117,7 @@ SChip8Font ;Super Chip 8 font set:
   .byte %10010000
   .byte %10010000
   .byte %11110000
-  .byte %11110000
+  .byte %01110000
   .byte %00010000
   .byte %00010000
   .byte %00010000
@@ -1883,7 +2134,7 @@ SChip8Font ;Super Chip 8 font set:
   .byte %11110000
   .byte %11100000
 ; ---- 6 ----
-  .byte %11110000
+  .byte %0110000
   .byte %11110000
   .byte %10000000
   .byte %10000000
@@ -1950,14 +2201,14 @@ SChip8Font ;Super Chip 8 font set:
   .byte %11000000
 ; ---- C ----
   .byte %01110000
-  .byte %11110000
+  .byte %11100000
   .byte %10000000
   .byte %10000000
   .byte %10000000
   .byte %10000000
   .byte %10000000
   .byte %10000000
-  .byte %11110000
+  .byte %11100000
   .byte %01110000
 ; ---- D ----
   .byte %11000000
@@ -1976,7 +2227,7 @@ SChip8Font ;Super Chip 8 font set:
   .byte %10000000
   .byte %10000000
   .byte %11110000
-  .byte %11110000
+  .byte %11100000
   .byte %10000000
   .byte %10000000
   .byte %11110000
@@ -1987,7 +2238,7 @@ SChip8Font ;Super Chip 8 font set:
   .byte %10000000
   .byte %10000000
   .byte %11110000
-  .byte %11110000
+  .byte %11100000
   .byte %10000000
   .byte %10000000
   .byte %10000000

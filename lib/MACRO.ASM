@@ -47,8 +47,8 @@
          LDY # <:1                                                                                                   
          LDX # >:1                                                                                                   
          LDA #$C0                                                                                                    
-         STY $0200                                                                                                   
-         STX $0201                                                                                                   
+         STY VDSLST                                                                                                   
+         STX VDSLST+1                                                                                                   
          STA NMIEN                                                                                                   
          .ENDM                                                                                                       
 ;-------------------------------------                                                                               
