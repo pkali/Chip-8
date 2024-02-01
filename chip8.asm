@@ -3,7 +3,7 @@
 ;*        for Atari 8-bit             *
 ;*        version:                    *
 .macro ver
-    .byte '2.0'
+    .byte '2.1'
 .endm     
 ;* author: Pawel "pirx" Kalinowski    *
 ;* 2005-12-27 --> 2024-01-27          *
@@ -41,6 +41,11 @@
         scc:inc PC
     .endm
 ;----------------------
+    .macro crash
+        jsr err_crash
+        mva #1 escapeFlag
+        jmp quit_to_dos
+    .endm
 ;==================================
 ;virtual machine registers
     .zpvar V0            .byte = $80
@@ -118,10 +123,12 @@ helpScreen
 
 crunch jmp $FFFF ; will be changed by INIT routine
 
+err_msg_FNF   .byte 'File not found', EOL
 err_msg_open  .byte 'OPEN Error', EOL
-err_msg_bget  .byte 'BGET Error', EOL
+err_msg_bget  .byte 'File load error', EOL
 err_msg_close .byte 'CLOSE Error', EOL
 err_no_cmd    .byte 'Wrong DOS, no command line.', EOL
+err_msg_crash .byte 'Interpreter crashed...', EOL
 welcome_msg   .byte 'Chip8 interpreter v'
               ver
               .byte ' by pirx 2024', EOL
@@ -202,6 +209,7 @@ open_file
     adc #0
     sta ICBAH,x
     jsr open_1
+    spl:jmp err_open
 
 buffer = chip8Code
 buflen = $1000
@@ -219,7 +227,8 @@ read_binary
     sta ICBLL+1,x
     jsr CIOV
     cpy #EOFERR      ; 136 End of file, it is OK.
-    seq:jmi err_bget
+    beq @+
+    spl:jmp err_bget
     
     jsr get_bare_file_name
     jsr crunch       ; get next command line entry.
@@ -290,9 +299,7 @@ open_1
     sta ICAX1,x
     lda #$00         ; additional parameter, $00 is always OK
     sta ICAX2,x 
-    jsr CIOV
-    jmi err_open
-    rts
+    jmp CIOV         ;jsr rts
 
 get_1
 ; IOCB #1 only
@@ -365,58 +372,75 @@ name_start_found
 ;---------------------------------
 ;(error) messages
 welcome
-    ldx #0 ;IOCB #0 (E:)
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<welcome_msg
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>welcome_msg
-    sta ICBAH,x
+    sta ICBAH ;,x
     jmp err_prnt
 usage
-    ldx #0 ;IOCB #0 (E:)
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<usage_msg
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>usage_msg
-    sta ICBAH,x
+    sta ICBAH ;,x
     jmp err_prnt
 err_no_command_line
-    ldx #0 ;IOCB #0 (E:)
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<err_no_cmd
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>err_no_cmd
-    sta ICBAH,x
+    sta ICBAH ;,x
+    jmp err_prnt
+err_file_not_found
+    ;ldx #0 ;IOCB #0 (E:)
+    lda #<err_msg_FNF
+    sta ICBAL ;,x
+    lda #>err_msg_FNF
+    sta ICBAH ;,x
     jmp err_prnt
 err_open
-    ldx #0 ;IOCB #0 (E:)
+    cpy #FILENF
+    beq err_file_not_found
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_open
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>err_msg_open
-    sta ICBAH,x
+    sta ICBAH ;,x
     jmp err_prnt
 err_bget
-    ldx #0 ;IOCB #0 (E:)
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_bget
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>err_msg_bget
-    sta ICBAH,x
+    sta ICBAH ;,x
+    jmp err_prnt
+err_crash
+    ;ldx #0 ;IOCB #0 (E:)
+    lda #<err_msg_crash
+    sta ICBAL ;,x
+    lda #>err_msg_crash
+    sta ICBAH ;,x
     jmp err_prnt
 err_close
-    ldx #0 ;IOCB #0 (E:)
+    ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_close
-    sta ICBAL,x
+    sta ICBAL ;,x
     lda #>err_msg_close
-    sta ICBAH,x
+    sta ICBAH ;,x
     ;jmp err_prnt
 
 err_prnt
     sty err_code
     lda #max_buf_len ; set buffer length for max
-    sta ICBLL,x
+    sta ICBLL ;,x
     lda #0
-    sta ICBLH,x
+    tax
+    sta ICBLH ;,x
     lda #write ; 'print string' command
-    sta ICCOM,x
-    jsr CIOV ; print it.
-    rts
+    sta ICCOM ;,x
+    jmp CIOV ; print it.
+    ;rts
     
 ;---------------------------------
 get_config
@@ -492,7 +516,7 @@ asciiNumber
 ;----------------
     
 ;==================================
-exit_to_dos
+quit_to_dos
 ;==================================
     VMAIN XITVBV,7
     mwa save_DLPTRS DLPTRS
@@ -545,7 +569,7 @@ emulationLoop
     inc_PC
     jsr delayChip8  ;atari is too fast for Chip8
     lda escapeFlag
-    seq:jmp exit_to_dos
+    seq:jmp quit_to_dos
     lda restartFlag
     seq:jmp emulate
     jmp emulationLoop
@@ -593,7 +617,7 @@ Chip8_0XXX
     and #$F0
     cmp #$C0
     beq scrollDown
-    halt
+    crash
     rts
 ;-------------------
 setSuperMode
@@ -841,7 +865,7 @@ Chip8_8XXX
     ; 8ryS - multiple register manipulation instruction
     ; lowest nibble (S) sets the operation
     ; Important - not all sub-instructions are defined
-    ; if an undefined is spotted, the interpreter will HALT
+    ; if an undefined is spotted, the interpreter will crash
     lda currentInstruction+1
     and #$0F
     asl     ;*2 because JumpTable is 2 bytes wide
@@ -999,8 +1023,8 @@ C8_8XXb
 C8_8XXc
 C8_8XXd
 C8_8XXf
-    ;there are no such instructions, so HALT...
-    HALT
+    ;there are no such instructions, so crash...
+    crash
 C8_8XYe
     ;8r0e       shl vr       shift register vr left,bit 7 goes into register vf
     ;let's first ignore Y (although in ANT game it is set to 5)
@@ -1060,7 +1084,7 @@ Chip8_AXXX
     rts
 ;------------------
 Chip8_BXXX
-        HALT
+        crash
     rts
 ;------------------
 Chip8_CXXX
@@ -1355,8 +1379,8 @@ Chip8_EXXX
     beq skup.k
     cmp #$9e
     beq skpr.k
-    ;apparently an error so halt...
-    HALT $37
+    ;apparently an error so crash...
+    crash $37
     ;rts
 skup.k
     ;eka1       skup k       skip if key (register rk) not pressed
@@ -1414,7 +1438,7 @@ Chip8_FXXX
     jeq fr75
     cmp #$85
     jeq fr85
-    HALT
+    crash
     ;rts
 fr1E
     ;fr1e       adi vr       add register vr to the index register
