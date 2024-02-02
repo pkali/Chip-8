@@ -4,13 +4,14 @@ Chip-8 and Superchip-8 interpreter for Atari 8-bit
 Progammed in 2005-2006, compiled with omc65.
 Update 2024 - rewritten for mads and SpartaDosX / BW-DOS.
 
-## v2.1
+##2024-02-01: v2.1
 * much better error messages
 * does not hang when CHIP8.CFG not found
-* 4 new SuperChip8 games:
+* incorrect file error handling fixed
+* 4 new SuperChip8 games with config - ROCKTO, TURNOVER, SOKOBAN, CTETRIS
 
-## v2.0, 2023-01-27
-Command line interface.
+##2023-01-27: v2.0
+Command line interface, first attempt.
 
 
 Would be nice to add new games and joystick driven game selection.
