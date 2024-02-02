@@ -123,16 +123,18 @@ helpScreen
 
 crunch jmp $FFFF ; will be changed by INIT routine
 
-err_msg_FNF   .byte 'File not found', EOL
-err_msg_open  .byte 'OPEN Error', EOL
-err_msg_bget  .byte 'File load error', EOL
-err_msg_close .byte 'CLOSE Error', EOL
+err_msg_FNF   .byte 'File not found.', EOL
+err_msg_nocfg .byte 'Config file not found.', EOL
+err_msg_open  .byte 'OPEN Error.', EOL
+err_msg_bget  .byte 'File load error.', EOL
+err_msg_close .byte 'CLOSE Error.', EOL
 err_no_cmd    .byte 'Wrong DOS, no command line.', EOL
 err_msg_crash .byte 'Interpreter crashed...', EOL
 welcome_msg   .byte 'Chip8 interpreter v'
               ver
               .byte ' by pirx 2024', EOL
 usage_msg     .byte 'Use: CHIP8 pathToGame [pathToConfig]', EOL
+config_msg    .byte 'Loading config.', EOL
 err_code      .byte 0
 fname_len     .byte 0
 bare_fname    :(8+1+3) .byte 0
@@ -226,11 +228,13 @@ read_binary
     lda #>buflen
     sta ICBLL+1,x
     jsr CIOV
+    bpl @+           ; no error
     cpy #EOFERR      ; 136 End of file, it is OK.
     beq @+
-    spl:jmp err_bget
-    
+    jmp err_bget
+@    
     jsr get_bare_file_name
+    jsr msg_cfg
     jsr crunch       ; get next command line entry.
     jeq open_default_config
     ldx #0           ; IOCB #0 (E:)
@@ -269,9 +273,11 @@ open_default_config
     sta ICBAH,x
 @
     jsr open_1
+    bpl @+    
+      jsr err_no_config
+      jmp emulate
+@
     jsr get_config
-    
-    
     
     jmp emulate
 
@@ -385,6 +391,13 @@ usage
     lda #>usage_msg
     sta ICBAH ;,x
     jmp err_prnt
+msg_cfg
+    ;ldx #0 ;IOCB #0 (E:)
+    lda #<config_msg
+    sta ICBAL ;,x
+    lda #>config_msg
+    sta ICBAH ;,x
+    jmp err_prnt
 err_no_command_line
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_no_cmd
@@ -397,6 +410,13 @@ err_file_not_found
     lda #<err_msg_FNF
     sta ICBAL ;,x
     lda #>err_msg_FNF
+    sta ICBAH ;,x
+    jmp err_prnt
+err_no_config
+    ;ldx #0 ;IOCB #0 (E:)
+    lda #<err_msg_nocfg
+    sta ICBAL ;,x
+    lda #>err_msg_nocfg
     sta ICBAH ;,x
     jmp err_prnt
 err_open
@@ -443,13 +463,13 @@ err_prnt
     ;rts
     
 ;---------------------------------
-get_config
+.proc get_config
 ;reads configuration file CHIP8.CFG
 ;from current directory
 ;and tries to assign joystick to Chip8 keyboard
 ;game name address in temp_in
 ;length of game name in fname_len
-
+    
    ; open 1,4,0,"D:CHIP8.CFG"
 get_configLoop
     mwa #bare_fname temp_in
@@ -500,8 +520,9 @@ finishLine
 get_config_error
     jsr close_1
     rts
+.endp
 ;----------------
-asciiFind    
+.proc asciiFind    
     ldx #15
 asciiFindLoop
     cmp asciiNumber,X
@@ -513,6 +534,7 @@ asciiFound
     rts
 asciiNumber
     .byte '0123456789ABCDEF'
+.endp
 ;----------------
     
 ;==================================
@@ -2268,7 +2290,6 @@ SChip8Font ;Super Chip 8 font set:
   .byte %10000000
   .byte %10000000
 ;==================================
-    
    .align $1000
 screen
     run start
