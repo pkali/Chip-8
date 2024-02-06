@@ -3,10 +3,10 @@
 ;*        for Atari 8-bit             *
 ;*        version:                    *
 .macro ver
-    .byte '2.1'
+    .byte '2.2'
 .endm     
 ;* author: Pawel "pirx" Kalinowski    *
-;* 2005-12-27 --> 2024-01-27          *
+;* 2005, 2006, 2024.........          *
 ;**************************************
 ;2024-01-27
 ; Code translated to mads,
@@ -32,6 +32,14 @@
 
     icl 'lib/ATARISYS.ASM'
     icl 'lib/MACRO.ASM'
+;----------------------
+; I/O equtes
+zcrname = 3
+comfnam = 33
+write = $09
+max_buf_len = 63
+buffer = chip8Code
+buflen = $1000
 ;----------------------
     .macro inc_PC
         clc
@@ -136,19 +144,14 @@ welcome_msg   .byte 'Chip8 interpreter v'
 usage_msg     .byte 'Use: CHIP8 pathToGame [pathToConfig]', EOL
 config_msg    .byte 'Loading config.', EOL
 err_code      .byte 0
-fname_len     .byte 0
+bare_fname_len     .byte 0
 bare_fname    :(8+1+3) .byte 0
 config_fname  .byte 'D:CHIP8.CFG', EOL
+bin_path_save :max_buf_len .byte 0
 save_COLOR2   .byte 0
 save_DLPTRS   .word 0
 save_VDSLST   .word 0
 save_DMACTLS  .byte 0
-
-; I/O equtes
-zcrname = 3
-comfnam = 33
-write = $09
-max_buf_len = 63
 
 
 start
@@ -195,45 +198,22 @@ command_line
     clc
     adc #comfnam
     sta ICBAL,x
+    sta temp_in      ;for saving the path to
     lda DOSVEC+1
     adc #0
     sta ICBAH,x
+    sta temp_in +1
     jsr CIOV         ; print it.
-
-open_file
-    jsr close_1      ; it seems that #1 is sometimes open on startup :O
-    ldx #$10         ; IOCB #1
-    lda DOSVEC       ; store DOSVEC+33 at icba
-    clc
-    adc #comfnam
-    sta ICBAL,x
-    lda DOSVEC+1
-    adc #0
-    sta ICBAH,x
-    jsr open_1
-    spl:jmp err_open
-
-buffer = chip8Code
-buflen = $1000
-read_binary
-    ldx #$10       ; IOCB #1
-    lda #GETCHR      ; GET BYTES / BINARY READ
-    sta ICCOM,x
-    lda #<buffer     ; memory address where data is supposed to go
-    sta ICBAL,x
-    lda #>buffer
-    sta ICBAL+1,x
-    lda #<buflen     ; read data block size in bytes
-    sta ICBLL,x
-    lda #>buflen
-    sta ICBLL+1,x
-    jsr CIOV
-    bpl @+           ; no error
-    cpy #EOFERR      ; 136 End of file, it is OK.
-    beq @+
-    jmp err_bget
+    ; save the path
+    ldy #0
 @    
+      lda (temp_in),y
+      sta bin_path_save,y
+      iny
+      cpy #max_buf_len
+    bne @-
     jsr get_bare_file_name
+    ;--------config file--------
     jsr msg_cfg
     jsr crunch       ; get next command line entry.
     jeq open_default_config
@@ -277,8 +257,32 @@ open_default_config
       jsr err_no_config
       jmp emulate
 @
-    jsr get_config
-    
+    jsr get_config_bulk
+
+    ;clean game memory area
+    mwa #buffer temp_in
+    ldy #0
+
+@
+      tya
+      sta (temp_in),y
+      inw temp_in
+      cpw temp_in #(buffer+buflen)
+    bne @-
+
+open_game_file
+    jsr close_1      ; it seems that #1 is sometimes open on startup :O
+    ldx #$10         ; IOCB #1
+    lda #<bin_path_save
+    sta ICBAL,x
+    lda #>bin_path_save
+    sta ICBAH,x
+    jsr open_1
+    spl:jmp err_open
+
+read_binary
+    ldx #$10       ; IOCB #1
+    jsr bget    
     jmp emulate
 
 ;---------------------------------
@@ -295,12 +299,12 @@ open_1
 ; IOCB #1 only
 ; file to open must be already in ICBAL and ICBAH
     ldx #$10         ; IOCB #1
-    lda #_OPEN       ; command: OPEN
-    sta ICCOM,x
     ;lda #<fname     ; filename address
     ;sta ICBAL,x
     ;lda #>fname
     ;sta ICBAL+1,x
+    lda #_OPEN       ; command: OPEN
+    sta ICCOM,x
     lda #OPNIN       ; $04 read, $08 save, $09 append, $0c R/W
     sta ICAX1,x
     lda #$00         ; additional parameter, $00 is always OK
@@ -329,7 +333,7 @@ skip_spaces_1
 .proc get_bare_file_name
 ; gets file name from command line buffer
     ; find end of the name
-    adw DOSVEC #comfnam temp_in
+    ; adw DOSVEC #comfnam temp_in
     ldy #0
 @
       lda (temp_in),y
@@ -363,14 +367,14 @@ name_start_found
     sta temp_in
     scc:inc temp_in+1
     ; in X - length of the filename
-    stx fname_len
+    stx bare_fname_len
     ; in temp_in - beginning of the filename
     ldy #0
 @
       lda (temp_in),y
       sta bare_fname,y
       iny
-      cpy fname_len
+      cpy bare_fname_len
     bne @-
     rts
 
@@ -383,42 +387,42 @@ welcome
     sta ICBAL ;,x
     lda #>welcome_msg
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 usage
     ;ldx #0 ;IOCB #0 (E:)
     lda #<usage_msg
     sta ICBAL ;,x
     lda #>usage_msg
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 msg_cfg
     ;ldx #0 ;IOCB #0 (E:)
     lda #<config_msg
     sta ICBAL ;,x
     lda #>config_msg
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_no_command_line
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_no_cmd
     sta ICBAL ;,x
     lda #>err_no_cmd
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_file_not_found
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_FNF
     sta ICBAL ;,x
     lda #>err_msg_FNF
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_no_config
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_nocfg
     sta ICBAL ;,x
     lda #>err_msg_nocfg
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_open
     cpy #FILENF
     beq err_file_not_found
@@ -427,30 +431,30 @@ err_open
     sta ICBAL ;,x
     lda #>err_msg_open
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_bget
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_bget
     sta ICBAL ;,x
     lda #>err_msg_bget
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_crash
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_crash
     sta ICBAL ;,x
     lda #>err_msg_crash
     sta ICBAH ;,x
-    jmp err_prnt
+    jmp prnt
 err_close
     ;ldx #0 ;IOCB #0 (E:)
     lda #<err_msg_close
     sta ICBAL ;,x
     lda #>err_msg_close
     sta ICBAH ;,x
-    ;jmp err_prnt
+    ;jmp prnt
 
-err_prnt
+prnt
     sty err_code
     lda #max_buf_len ; set buffer length for max
     sta ICBLL ;,x
@@ -461,74 +465,113 @@ err_prnt
     sta ICCOM ;,x
     jmp CIOV ; print it.
     ;rts
-    
+.proc bget
+; IOCB # * $10 in X
+    lda #GETCHR      ; GET BYTES / BINARY READ
+    sta ICCOM,x
+    lda #<buffer     ; memory address where data is supposed to go
+    sta ICBAL,x
+    lda #>buffer
+    sta ICBAL+1,x
+    lda #<buflen     ; read data block size in bytes
+    sta ICBLL,x
+    lda #>buflen
+    sta ICBLH,x
+    jsr CIOV
+    bpl @+           ; no error
+    cpy #EOFERR      ; 136 End of file, it is OK.
+    beq @+
+    jmp err_bget
+@    
+    rts
+.endp
 ;---------------------------------
-.proc get_config
-;reads configuration file CHIP8.CFG
-;from current directory
-;and tries to assign joystick to Chip8 keyboard
-;game name address in temp_in
-;length of game name in fname_len
-    
-   ; open 1,4,0,"D:CHIP8.CFG"
-get_configLoop
-    mwa #bare_fname temp_in
-    mva #0 temp_out   ;char counter 
+.proc get_config_bulk
+; reads the whole config into game memory buffer 
+; as a binary file and parses it from there
+config_end_addr = fetchAddress  ; reuse
+char_counter = V0
+config_buffer_pointer = temp_in
+bare_fname_pointer = temp_out
 
-get_configLoopInner
-    jsr get_1
-    cmp #'/'         ;  / = comment
-    beq finishLine
+    ldx #$10       ; IOCB #1
+    jsr bget
+    ; config file size save
+    ldx #$10
+    lda ICBLL,x
+    sta config_end_addr
+    lda ICBLH,x
+    sta config_end_addr+1
+    
+    adw config_end_addr #buffer
+    mwa #(buffer-1) config_buffer_pointer
+
+get_configLoop
+    inw config_buffer_pointer
+    cpw config_buffer_pointer config_end_addr
+    scc:rts 
+    mva #0 char_counter   ;char counter
+    mwa #bare_fname bare_fname_pointer
+    
     ldy #0
-    cmp (temp_in),y
-    bne finishLine
-    ;1st char found!
-    inw temp_in
-    inc:lda temp_out
-    cmp fname_len
+get_configLoopInner
+      lda (config_buffer_pointer),y
+      cmp #'/'         ;  / = comment
+      beq finishLine
+      cmp (bare_fname_pointer),y
+      bne finishLine
+      ;1st char found!
+      inw config_buffer_pointer
+      inw bare_fname_pointer
+      inc:lda char_counter
+      cmp bare_fname_len
     bne get_configLoopInner
-    ; name found!!!!
-    jsr skip_spaces_1
-    jsr asciiFind 
+    ; name found!!!! read joystick assignment values
+
+    jsr skip_spaces_M
+    jsr ascii_to_int 
     stx joystickConversion
-    jsr skip_spaces_1
-    jsr asciiFind 
+    jsr skip_spaces_M
+    jsr ascii_to_int 
     stx joystickConversion+1
-    jsr skip_spaces_1
-    jsr asciiFind 
+    jsr skip_spaces_M
+    jsr ascii_to_int 
     stx joystickConversion+2
-    jsr skip_spaces_1
-    jsr asciiFind 
+    jsr skip_spaces_M
+    jsr ascii_to_int 
     stx joystickConversion+3
-    jsr skip_spaces_1
-    jsr asciiFind 
+    jsr skip_spaces_M
+    jsr ascii_to_int 
     stx joystickConversion+4
-    jsr skip_spaces_1
-    jsr asciiFind
-    lda toUpperNibble,X  ;A=X*16
+    jsr skip_spaces_M    ; read delay settings
+    jsr ascii_to_int
+    lda toUpperNibble,X  ; A=X*16
     sta delay
-    jsr close_1
     rts
 
 finishLine
-    jsr get_1
-    bmi get_config_error
+    inw config_buffer_pointer
+    lda (config_buffer_pointer),y
     cmp #EOL
     bne finishLine
     jmp get_configLoop
     
-get_config_error
-    jsr close_1
+skip_spaces_M
+    inw config_buffer_pointer
+    lda (config_buffer_pointer),y
+    cmp #' '
+    beq skip_spaces_M
     rts
+
 .endp
-;----------------
-.proc asciiFind    
+;---------------------------------
+.proc ascii_to_int    
     ldx #15
-asciiFindLoop
+ascii_to_intLoop
     cmp asciiNumber,X
     beq asciiFound
     dex
-    bpl asciiFindLoop
+    bpl ascii_to_intLoop
     ;in X I have binary number to be put into 
 asciiFound
     rts
@@ -549,7 +592,7 @@ quit_to_dos
     mvx #0 AUDF1
     stx AUDC1
     dex
-    sta CH1  ; clear keyboard
+    stx CHKEY  ; clear keyboard
     rts
     
 ;==================================
