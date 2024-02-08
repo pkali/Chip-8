@@ -2026,7 +2026,7 @@ joystickConversion
     ; the above are default settings that work for a few games, e.g. BREAKOUT
 delay
     ;the higher the value the emulation is slower (in CHIP8 mode)
-    .byte $80
+    .byte $00
 stackTop
     ;16 levels of stack
     :16 .word 0
