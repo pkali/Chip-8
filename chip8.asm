@@ -152,7 +152,7 @@ save_COLOR2   .byte 0
 save_DLPTRS   .word 0
 save_VDSLST   .word 0
 save_DMACTLS  .byte 0
-
+save_VVBLKD   .word 0
 
 start
     ;save current graphics settings
@@ -160,6 +160,7 @@ start
     mwa DLPTRS save_DLPTRS
     mwa VDSLST save_VDSLST
     mva DMACTLS save_DMACTLS
+    mwa VVBLKD save_VVBLKD
 
     jsr welcome
 
@@ -583,7 +584,11 @@ asciiNumber
 ;==================================
 quit_to_dos
 ;==================================
-    VMAIN XITVBV,7
+    ;VMAIN XITVBV,7
+    LDY save_VVBLKD                                                                                                   
+    LDX save_VVBLKD+1                                                                                                   
+    LDA #7                                                                                                     
+    JSR SETVBV  
     mwa save_DLPTRS DLPTRS
     mva save_DMACTLS DMACTLS
     mwa save_VDSLST VDSLST
@@ -2025,7 +2030,7 @@ joystickConversion
     ; these bytes are set by readConfig
     ; the above are default settings that work for a few games, e.g. BREAKOUT
 delay
-    ;the higher the value the emulation is slower (in CHIP8 mode)
+    ;the higher the value the emulation is slower
     .byte $00
 stackTop
     ;16 levels of stack
